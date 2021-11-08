@@ -1,20 +1,12 @@
-# This file contains metadata for your plugin. Since
-# version 2.0 of QGIS this is the proper way to supply
-# information about a plugin. The old method of
-# embedding metadata in __init__.py will
-# is no longer supported since version 2.0.
-
-# This file should be included when you package your plugin.# Mandatory items:
-
 [general]
-name=OpenTripPlanner
-qgisMinimumVersion=3.0
-description=Routen- und Erreichbarkeitsberechnungen mit dem OpenTripPlanner
-version=1.04
+name=GruenflaechenOTP
+qgisMinimumVersion=3.10
+description=Berechnung des Versorgungsgrads mit Grünflächen
+version=0.1
 author=GGR
 email=franke@ggr-planung.de
 
-about=Dieses Plugin bindet die Plattform OpenTripPlanner (http://www.opentripplanner.org) für multimodale Routensuche in QuantumGIS ein. Über die Oberfläche können die Routenparameter eingestellt werden und verschiedene Batch-Analysen über die angepasste Scripting-API gestartet werden. Der angepasste OpenTripPlanner und Jython werden mit diesem Plugin ausgeliefert. Zusätzlich muss das Java Development Kit 8 installiert werden.
+about=Berechnung des Versorgungsgrads mit Grünflächen am Beispiel Lichtenberg. Der angepasste OpenTripPlanner und Jython werden mit diesem Plugin ausgeliefert. Zusätzlich muss das Java Development Kit 8 installiert werden.
 
 tracker=github.com
 repository=github.com
@@ -26,7 +18,7 @@ repository=github.com
 # changelog=
 
 # Tags are comma separated with spaces allowed
-tags=routing, OpenTripPlanner, OTP
+tags=lichtenberg, routing, OpenTripPlanner, OTP
 
 homepage=
 category=Plugins

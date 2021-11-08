@@ -117,7 +117,7 @@ class OTP(object):
         config.read(do_create=True)
         self.config_control = ConfigurationControl(self.dlg)
 
-        self.setup_UI()
+        #self.setup_UI()
 
     def save(self):
         '''
@@ -650,13 +650,13 @@ class OTP(object):
         to signals here, otherwise they may be connected multiple times)
         '''
 
-        # reload layer combos, if layers changed on rerun
-        layers = [layer for layer in QgsProject.instance().mapLayers().values()]
-        if layers != self.layers:
-            self.fill_layer_combos()
+        ## reload layer combos, if layers changed on rerun
+        #layers = [layer for layer in QgsProject.instance().mapLayers().values()]
+        #if layers != self.layers:
+            #self.fill_layer_combos()
 
-        # reload routers on every run (they might be changed outside)
-        self.fill_router_combo()
+        ## reload routers on every run (they might be changed outside)
+        #self.fill_router_combo()
 
         # show the dialog
         self.dlg.show()
