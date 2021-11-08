@@ -18,6 +18,8 @@ ROUTER_FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'ui', 'router.ui'))
 PROGRESS_FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'ui', 'progress.ui'))
+SETTINGS_FORM_CLASS, _ = uic.loadUiType(os.path.join(
+    os.path.dirname(__file__), 'ui', 'settings.ui'))
 
 # WARNING: doesn't work in QGIS, because it doesn't support the QString module anymore (autocast to str)
 try:
@@ -406,3 +408,105 @@ class RouterDialog(QtWidgets.QDialog, ROUTER_FORM_CLASS):
                                       memory=self.memory, parent=self)
         diag.exec_()
 
+
+class SettingsDialog(QtWidgets.QDialog, SETTINGS_FORM_CLASS):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.parent = parent
+        self.setupUi(self)
+        self.button_box.accepted.connect(self.save)
+        self.button_box.accepted.connect(self.close)
+
+    def save():
+        pass
+
+
+    #def setupUi(self):
+        #super().setupUi()
+        #def browse_jar(edit, text):
+            #jar_file = browse_file(edit.text(),
+                                   #text, JAR_FILTER,
+                                   #save=False, parent=self.ui)
+            #if not jar_file:
+                #return
+            #edit.setText(jar_file)
+
+        #self.ui.otp_jar_browse_button.clicked.connect(
+            #lambda: browse_jar(self.ui.otp_jar_edit,
+                               #u'OTP JAR wählen'))
+        #self.ui.jython_browse_button.clicked.connect(
+            #lambda: browse_jar(self.ui.jython_edit,
+                               #u'Jython Standalone JAR wählen'))
+
+        #def browse_graph_path():
+            #path = str(QFileDialog.getExistingDirectory(
+                #self.ui, u'OTP Router Verzeichnis wählen',
+                #self.ui.graph_path_edit.text()))
+            #if not path:
+                #return
+            #self.ui.graph_path_edit.setText(path)
+            #self.fill_router_combo()
+
+        #self.ui.graph_path_browse_button.clicked.connect(browse_graph_path)
+
+        #def browse_java():
+            #java_file = browse_file(self.ui.java_edit.text(),
+                                    #'Java Version 1.8 wählen',
+                                    #ALL_FILE_FILTER, save=False,
+                                    #parent=self.ui)
+            #if not java_file:
+                #return
+            #self.ui.java_edit.setText(java_file)
+        #self.ui.java_browse_button.clicked.connect(browse_java)
+
+        #self.ui.search_java_button.clicked.connect(self.auto_java)
+
+    def auto_java():
+        '''
+        you don't have access to the environment variables of the system,
+        use some tricks depending on the system
+        '''
+        java_file = None
+        if platform.startswith('win'):
+            import winreg
+            java_key = None
+            try:
+                #64 Bit
+                java_key = winreg.OpenKey(
+                    winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE),
+                    'SOFTWARE\JavaSoft\Java Runtime Environment'
+                )
+            except WindowsError:
+                try:
+                    #32 Bit
+                    java_key = winreg.OpenKey(
+                        winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE),
+                        'SOFTWARE\WOW6432Node\JavaSoft\Java Runtime Environment'
+                    )
+                except WindowsError:
+                    pass
+            if java_key:
+                try:
+                    ver_key = winreg.OpenKey(java_key, "1.8")
+                    path = os.path.join(
+                        winreg.QueryValueEx(ver_key, 'JavaHome')[0],
+                        'bin', 'java.exe'
+                    )
+                    if os.path.exists(path):
+                        java_file = path
+                except WindowsError:
+                    pass
+        if platform.startswith('linux'):
+            # that is just the default path
+            path = '/usr/bin/java'
+            # ToDo: find right version
+            if os.path.exists(path):
+                java_file = path
+        if java_file:
+            self.ui.java_edit.setText(java_file)
+        else:
+            msg_box = QMessageBox(
+                QMessageBox.Warning, "Fehler",
+                u'Die automatische Suche nach Java 1.8 ist fehlgeschlagen. '
+                'Bitte suchen Sie die ausführbare Datei manuell.')
+            msg_box.exec_()

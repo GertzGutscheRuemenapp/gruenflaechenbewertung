@@ -26,23 +26,23 @@ from builtins import range
 from builtins import object
 import os
 from PyQt5.QtCore import (QSettings, QTranslator, qVersion,
-                              QCoreApplication, QProcess, QDateTime,
-                              QVariant, QLocale, QDate)
+                          QCoreApplication, QProcess, QDateTime,
+                          QVariant, QLocale, QDate)
 from PyQt5.QtWidgets import (QAction, QListWidgetItem, QCheckBox,
-                                 QMessageBox, QLabel, QDoubleSpinBox,
-                                 QFileDialog, QInputDialog, QLineEdit)
+                             QMessageBox, QLabel, QDoubleSpinBox,
+                             QFileDialog, QInputDialog, QLineEdit)
 from PyQt5.QtGui import QIcon
 from sys import platform
 
 from .config import (AVAILABLE_TRAVERSE_MODES,
-                    DATETIME_FORMAT, AGGREGATION_MODES, ACCUMULATION_MODES,
-                    DEFAULT_FILE, CALC_REACHABILITY_MODE,
-                    VM_MEMORY_RESERVED, Config, MANUAL_URL)
-from .dialogs import ExecOTPDialog, RouterDialog, InfoDialog
+                     DATETIME_FORMAT, AGGREGATION_MODES, ACCUMULATION_MODES,
+                     DEFAULT_FILE, CALC_REACHABILITY_MODE,
+                     VM_MEMORY_RESERVED, Config, MANUAL_URL)
+from .dialogs import (ExecOTPDialog, RouterDialog, InfoDialog, SettingsDialog,
+                      OTPMainWindow)
 from qgis._core import (QgsVectorLayer, QgsVectorLayerJoinInfo,
                         QgsCoordinateReferenceSystem, QgsField)
 from qgis.core import QgsVectorFileWriter, QgsProject
-from .dialogs import OTPMainWindow
 import locale
 import tempfile
 import shutil
@@ -102,8 +102,8 @@ class OTP(object):
                 QCoreApplication.installTranslator(self.translator)
 
         # Create the dialog (after translation) and keep reference
-        self.dlg = OTPMainWindow(on_close=self.save)
-        self.dlg.setWindowTitle(TITLE)
+        self.ui = OTPMainWindow()# on_close=self.save)
+        self.ui.setWindowTitle(TITLE)
 
         # store last used directory for saving files (init with home dir)
         self.prev_directory = os.environ['HOME']
@@ -115,9 +115,9 @@ class OTP(object):
         self.toolbar.setObjectName(u'OpenTripPlanner')
 
         config.read(do_create=True)
-        self.config_control = ConfigurationControl(self.dlg)
+        self.config_control = ConfigurationControl(self.ui)
 
-        #self.setup_UI()
+        self.setup_UI()
 
     def save(self):
         '''
@@ -130,232 +130,48 @@ class OTP(object):
         '''
         prefill UI-elements and connect slots and signals
         '''
-        ### PREFILL UI ELEMENTS AND CONNECT SLOTS TO SIGNALS ###
 
-        # set active tab (aggregation or accumulation depending on arrival checkbox)
-        self.dlg.arrival_checkbox.clicked.connect(self.toggle_arrival)
+        self.ui.create_project_button.clicked.connect(self.create_project)
+        self.ui.remove_project_button.clicked.connect(self.remove_project)
+        self.ui.clone_project_button.clicked.connect(self.clone_project)
 
-        self.dlg.start_orig_dest_button.clicked.connect(
-            self.start_origin_destination)
-        self.dlg.start_aggregation_button.clicked.connect(
-            self.start_aggregation)
-        self.dlg.start_reachability_button.clicked.connect(
-            self.start_reachability)
-        self.dlg.start_accumulation_button.clicked.connect(
-            self.start_accumulation)
+        self.ui.project_combo.currentIndexChanged.connect(
+            lambda index: self.change_project(
+                self.ui.project_combo.itemData(index)))
 
-        def browse_jar(edit, text):
-            jar_file = browse_file(edit.text(),
-                                   text, JAR_FILTER,
-                                   save=False, parent=self.dlg)
-            if not jar_file:
-                return
-            edit.setText(jar_file)
-
-        self.dlg.otp_jar_browse_button.clicked.connect(
-            lambda: browse_jar(self.dlg.otp_jar_edit,
-                               u'OTP JAR wählen'))
-        self.dlg.jython_browse_button.clicked.connect(
-            lambda: browse_jar(self.dlg.jython_edit,
-                               u'Jython Standalone JAR wählen'))
-
-        def browse_graph_path():
-            path = str(QFileDialog.getExistingDirectory(
-                self.dlg, u'OTP Router Verzeichnis wählen',
-                self.dlg.graph_path_edit.text()))
-            if not path:
-                return
-            self.dlg.graph_path_edit.setText(path)
-            self.fill_router_combo()
-
-        self.dlg.graph_path_browse_button.clicked.connect(browse_graph_path)
-
-        def browse_java():
-            java_file = browse_file(self.dlg.java_edit.text(),
-                                    'Java Version 1.8 wählen',
-                                    ALL_FILE_FILTER, save=False,
-                                    parent=self.dlg)
-            if not java_file:
-                return
-            self.dlg.java_edit.setText(java_file)
-        self.dlg.java_browse_button.clicked.connect(browse_java)
-
-        def auto_java():
-            '''
-            you don't have access to the environment variables of the system,
-            use some tricks depending on the system
-            '''
-            java_file = None
-            if platform.startswith('win'):
-                import winreg
-                java_key = None
-                try:
-                    #64 Bit
-                    java_key = winreg.OpenKey(
-                        winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE),
-                        'SOFTWARE\JavaSoft\Java Runtime Environment'
-                    )
-                except WindowsError:
-                    try:
-                        #32 Bit
-                        java_key = winreg.OpenKey(
-                            winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE),
-                            'SOFTWARE\WOW6432Node\JavaSoft\Java Runtime Environment'
-                        )
-                    except WindowsError:
-                        pass
-                if java_key:
-                    try:
-                        ver_key = winreg.OpenKey(java_key, "1.8")
-                        path = os.path.join(
-                            winreg.QueryValueEx(ver_key, 'JavaHome')[0],
-                            'bin', 'java.exe'
-                        )
-                        if os.path.exists(path):
-                            java_file = path
-                    except WindowsError:
-                        pass
-            if platform.startswith('linux'):
-                # that is just the default path
-                path = '/usr/bin/java'
-                # ToDo: find right version
-                if os.path.exists(path):
-                    java_file = path
-            if java_file:
-                self.dlg.java_edit.setText(java_file)
-            else:
-                msg_box = QMessageBox(
-                    QMessageBox.Warning, "Fehler",
-                    u'Die automatische Suche nach Java 1.8 ist fehlgeschlagen. '
-                    'Bitte suchen Sie die ausführbare Datei manuell.')
-                msg_box.exec_()
-        self.dlg.search_java_button.clicked.connect(auto_java)
-
-        # available layers are stored in here
-        self.layer_list = []
-        self.layers = None
-
-        self.fill_layer_combos()
-
-        # refresh layer ids on selection of different layer
-        self.dlg.origins_combo.currentIndexChanged.connect(
-            lambda: self.fill_id_combo(self.dlg.origins_combo,
-                                       self.dlg.origins_id_combo))
-        self.dlg.destinations_combo.currentIndexChanged.connect(
-            lambda: self.fill_id_combo(self.dlg.destinations_combo,
-                                       self.dlg.destinations_id_combo))
-        # reset aggregation and accumulation field combo, if layer changed
-        self.dlg.destinations_combo.currentIndexChanged.connect(
-            lambda: self.fill_id_combo(self.dlg.destinations_combo,
-                                       self.dlg.aggregation_field_combo))
-        self.fill_id_combo(self.dlg.destinations_combo,
-                           self.dlg.aggregation_field_combo)
-        self.dlg.destinations_combo.currentIndexChanged.connect(
-            lambda: self.fill_id_combo(self.dlg.destinations_combo,
-                                       self.dlg.accumulation_field_combo))
-        self.fill_id_combo(self.dlg.destinations_combo,
-                           self.dlg.accumulation_field_combo)
-
-        # checkboxes for selecting the traverse modes
-        for mode in AVAILABLE_TRAVERSE_MODES:
-            item = QListWidgetItem(self.dlg.mode_list_view)
-            checkbox = QCheckBox(mode)
-            checkbox.setTristate(False)
-            self.dlg.mode_list_view.setItemWidget(item, checkbox)
-
-        self.dlg.create_router_button.clicked.connect(self.create_router)
-
-        # combobox with modes
-
-        self.dlg.aggregation_mode_combo.addItems(list(AGGREGATION_MODES.keys()))
-        agg_mode_combo = self.dlg.aggregation_mode_combo
-        agg_layout = self.dlg.aggregation_value_edit
-        agg_help_button = self.dlg.agg_help_button
-        self.set_mode_params(AGGREGATION_MODES, agg_mode_combo, agg_layout,
-                             agg_help_button)
-        agg_mode_combo.currentIndexChanged.connect(
-            lambda: self.set_mode_params(AGGREGATION_MODES, agg_mode_combo,
-                                         agg_layout, agg_help_button))
-
-        self.dlg.accumulation_mode_combo.addItems(
-            list(ACCUMULATION_MODES.keys()))
-        acc_mode_combo = self.dlg.accumulation_mode_combo
-        acc_layout = self.dlg.accumulation_value_edit
-        acc_help_button = self.dlg.acc_help_button
-        self.set_mode_params(ACCUMULATION_MODES, acc_mode_combo,
-                             acc_layout, acc_help_button)
-        acc_mode_combo.currentIndexChanged.connect(
-            lambda: self.set_mode_params(ACCUMULATION_MODES,
-                                         acc_mode_combo, acc_layout,
-                                         acc_help_button))
-
-        # calendar
-        self.dlg.calendar_edit.clicked.connect(self.set_date)
-
-        def set_now():
-            now = datetime.now()
-            self.dlg.calendar_edit.setSelectedDate(now)
-            self.set_date(time = now.time())
-        self.dlg.date_now_button.clicked.connect(set_now)
-
-        self.dlg.refresh_layers_button.clicked.connect(
-            lambda: self.fill_layer_combos())
 
         # connect menu actions
-        self.dlg.reset_config_action.triggered.connect(
-            self.config_control.reset_to_default)
-        self.dlg.load_config_action.triggered.connect(
-            self.config_control.read)
-        self.dlg.save_config_action.triggered.connect(
-            self.config_control.save_as)
-        self.dlg.close_action.triggered.connect(self.dlg.close)
-        self.dlg.info_action.triggered.connect(self.info)
-        self.dlg.manual_action.triggered.connect(self.open_manual)
+        self.ui.info_action.triggered.connect(self.show_info)
 
-        # apply settings to UI (the layers are unknown at QGIS startup,
-        # so don't expect them to be already selected)
-        self.config_control.apply()
+        # connect menu actions
+        self.ui.settings_action.triggered.connect(self.show_settings)
 
         # router
-        self.fill_router_combo()
+        #self.fill_router_combo()
+        #self.setup_projects()
 
-        # call checkbox toggle callbacks (settings loaded, but
-        # checkboxes not 'clicked' while loading)
-        self.toggle_arrival()
 
-        ### currently DEACTIVATED functions ###
+    def setup_projects(self):
+        '''
+        fill project combobox with available projects
+        '''
+        self.project_manager.active_project = None
 
-        # initial wait of 0 is confusing and higher values don't seem to work
-        # as supposed to
-        # (only 'clamps' them, but doesn't work as maximum initial wait time)
-        # -> deactivated
-        self.dlg.clamp_edit.setVisible(False)
-        # additional labels describing initial waiting time (i didn't consider
-        # proper naming)
-        self.dlg.label_21.setVisible(False)
-        self.dlg.label_22.setVisible(False)
-        # -1 causes initial wait to be subtracted from total travel time,
-        # it's only value that makes sense for our purposes atm
-        self.dlg.clamp_edit.setValue(-1)
-
-        self.dlg.smart_search_checkbox.setEnabled(False)
-        self.dlg.smart_search_checkbox.setChecked(False)
-        msg = u'\nDEAKTIVIERT - in Entwicklung'
-        self.dlg.smart_search_checkbox.setToolTip(
-            self.dlg.smart_search_checkbox.toolTip() + msg)
+        self.ui.project_combo.blockSignals(True)
+        self.ui.project_combo.clear()
+        self.ui.project_combo.addItem('Projekt wählen')
+        self.ui.project_combo.model().item(0).setEnabled(False)
+        self.ui.domain_button.setEnabled(False)
+        self.ui.definition_button.setEnabled(False)
+        self.project_manager.reset_projects()
+        for project in self.project_manager.projects:
+            if project.name == '__test__':
+                continue
+            self.ui.project_combo.addItem(project.name, project)
+        self.ui.project_combo.blockSignals(False)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
-        """Get the translation for a string using Qt translation API.
-
-        We implement this ourselves since we do not inherit QObject.
-
-        :param message: String for translation.
-        :type message: str, QString
-
-        :returns: Translated version of message.
-        :rtype: QString
-        """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate('OpenTripPlanner', message)
 
@@ -371,44 +187,6 @@ class OTP(object):
         status_tip=None,
         whats_this=None,
         parent=None):
-        """Add a toolbar icon to the toolbar.
-
-        :param icon_path: Path to the icon for this action. Can be a resource
-            path (e.g. ':/plugins/foo/bar.png') or a normal file system path.
-        :type icon_path: str
-
-        :param text: Text that should be shown in menu items for this action.
-        :type text: str
-
-        :param callback: Function to be called when the action is triggered.
-        :type callback: function
-
-        :param enabled_flag: A flag indicating if the action should be enabled
-            by default. Defaults to True.
-        :type enabled_flag: bool
-
-        :param add_to_menu: Flag indicating whether the action should also
-            be added to the menu. Defaults to True.
-        :type add_to_menu: bool
-
-        :param add_to_toolbar: Flag indicating whether the action should also
-            be added to the toolbar. Defaults to True.
-        :type add_to_toolbar: bool
-
-        :param status_tip: Optional text to show in a popup when mouse pointer
-            hovers over the action.
-        :type status_tip: str
-
-        :param parent: Parent widget for the new action. Defaults None.
-        :type parent: QWidget
-
-        :param whats_this: Optional text to show in the status bar when the
-            mouse pointer hovers over the action.
-
-        :returns: The action that was created. Note that the action is also
-            added to self.actions list.
-        :rtype: QAction
-        """
 
         icon = QIcon(icon_path)
         action = QAction(icon, text, parent)
@@ -443,6 +221,17 @@ class OTP(object):
             callback=self.run,
             parent=self.iface.mainWindow())
 
+    def create_project(self):
+        pass
+
+    def remove_project(self):
+        pass
+
+    def clone_project(self):
+        pass
+
+    def change_project(self):
+        pass
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
@@ -455,7 +244,7 @@ class OTP(object):
         del self.toolbar
 
     def set_date(self, time=None):
-        date = self.dlg.calendar_edit.selectedDate()
+        date = self.ui.calendar_edit.selectedDate()
         # ToDo: if focus of user was on to_time, only change value in this one
         # but way below won't work, because focus changes, when calendar is
         # clicked
@@ -463,24 +252,24 @@ class OTP(object):
             #self.dlg.to_time_edit.setDate(date)
         #else:
             #self.dlg.time_edit.setDate(date)
-        self.dlg.to_time_edit.setDate(date)
-        self.dlg.time_edit.setDate(date)
+        self.ui.to_time_edit.setDate(date)
+        self.ui.time_edit.setDate(date)
         if time:
             if isinstance(time, QDate):
                 time = QDateTime(time).time()
             # QDate is lacking a time, so don't set it (only if QDateTime is)
             else:
-                self.dlg.time_edit.setTime(time)
-            self.dlg.to_time_edit.setTime(time)
+                self.ui.time_edit.setTime(time)
+            self.ui.to_time_edit.setTime(time)
 
     def toggle_arrival(self):
         '''
         enable/disable tabs, depending on whether arrival is checked or not
         '''
-        is_arrival = self.dlg.arrival_checkbox.checkState()
-        acc_idx = self.dlg.calculation_tabs.indexOf(self.dlg.accumulation_tab)
-        agg_idx = self.dlg.calculation_tabs.indexOf(self.dlg.aggregation_tab)
-        reach_idx = self.dlg.calculation_tabs.indexOf(self.dlg.reachability_tab)
+        is_arrival = self.ui.arrival_checkbox.checkState()
+        acc_idx = self.ui.calculation_tabs.indexOf(self.ui.accumulation_tab)
+        agg_idx = self.ui.calculation_tabs.indexOf(self.ui.aggregation_tab)
+        reach_idx = self.ui.calculation_tabs.indexOf(self.ui.reachability_tab)
         acc_enabled = agg_enabled = reach_enabled = False
 
         if is_arrival:
@@ -492,24 +281,24 @@ class OTP(object):
             left_text = u'späteste Ankunft'
             right_text = u'min nach Abfahrtszeit'
 
-        self.dlg.max_time_label_left.setText(left_text)
-        self.dlg.max_time_label_right.setText(right_text)
+        self.ui.max_time_label_left.setText(left_text)
+        self.ui.max_time_label_right.setText(right_text)
 
-        self.dlg.calculation_tabs.setTabEnabled(acc_idx, acc_enabled)
-        self.dlg.calculation_tabs.setTabEnabled(agg_idx, agg_enabled)
-        self.dlg.calculation_tabs.setTabEnabled(reach_idx, reach_enabled)
+        self.ui.calculation_tabs.setTabEnabled(acc_idx, acc_enabled)
+        self.ui.calculation_tabs.setTabEnabled(agg_idx, agg_enabled)
+        self.ui.calculation_tabs.setTabEnabled(reach_idx, reach_enabled)
 
     def fill_router_combo(self):
         # try to keep old router selected
         saved_router = config.settings['router_config']['router']
-        self.dlg.router_combo.clear()
+        self.ui.router_combo.clear()
         idx = 0
-        graph_path = self.dlg.graph_path_edit.text()
+        graph_path = self.ui.graph_path_edit.text()
         if not os.path.exists(graph_path):
-            self.dlg.router_combo.addItem(
+            self.ui.router_combo.addItem(
                 'Verzeichnis mit Routern nicht gefunden')
-            self.dlg.router_combo.setEnabled(False)
-            self.dlg.create_router_button.setEnabled(False)
+            self.ui.router_combo.setEnabled(False)
+            self.ui.create_router_button.setEnabled(False)
         else:
             # subdirectories in graph-dir are treated as routers by OTP
             for i, subdir in enumerate(os.listdir(graph_path)):
@@ -517,12 +306,12 @@ class OTP(object):
                 if os.path.isdir(path):
                     graph_file = os.path.join(path, 'Graph.obj')
                     if os.path.exists(graph_file):
-                        self.dlg.router_combo.addItem(subdir)
+                        self.ui.router_combo.addItem(subdir)
                         if saved_router == subdir:
                             idx = i
-            self.dlg.router_combo.setEnabled(True)
-            self.dlg.create_router_button.setEnabled(True)
-        self.dlg.router_combo.setCurrentIndex(idx)
+            self.ui.router_combo.setEnabled(True)
+            self.ui.create_router_button.setEnabled(True)
+        self.ui.router_combo.setCurrentIndex(idx)
 
     def fill_layer_combos(self, layers=None):
         '''
@@ -536,13 +325,13 @@ class OTP(object):
         old_destination_layer = None
         if len(self.layer_list) > 0:
             old_origin_layer = self.layer_list[
-                self.dlg.origins_combo.currentIndex()]
+                self.ui.origins_combo.currentIndex()]
             old_destination_layer = self.layer_list[
-                self.dlg.destinations_combo.currentIndex()]
+                self.ui.destinations_combo.currentIndex()]
 
         self.layer_list = []
-        self.dlg.origins_combo.clear()
-        self.dlg.destinations_combo.clear()
+        self.ui.origins_combo.clear()
+        self.ui.destinations_combo.clear()
         old_origin_idx = 0
         old_destination_idx = 0
         i = 0 # counter for QgsVectorLayers
@@ -553,21 +342,21 @@ class OTP(object):
                 if layer == old_destination_layer:
                     old_destination_idx = i
                 self.layer_list.append(layer)
-                self.dlg.origins_combo.addItem(layer.name())
-                self.dlg.destinations_combo.addItem(layer.name())
+                self.ui.origins_combo.addItem(layer.name())
+                self.ui.destinations_combo.addItem(layer.name())
                 i += 1
 
         # select active layer in comboboxes
-        self.dlg.origins_combo.setCurrentIndex(old_origin_idx)
-        self.dlg.destinations_combo.setCurrentIndex(old_destination_idx)
+        self.ui.origins_combo.setCurrentIndex(old_origin_idx)
+        self.ui.destinations_combo.setCurrentIndex(old_destination_idx)
 
         # fill ids although there is already a signal/slot connection
         # (in __init__) to do this,
         # but if index doesn't change (idx == 0), signal doesn't fire (
         # so it maybe is done twice, but this is not performance-relevant)
-        self.fill_id_combo(self.dlg.origins_combo, self.dlg.origins_id_combo)
+        self.fill_id_combo(self.ui.origins_combo, self.ui.origins_id_combo)
         self.fill_id_combo(
-            self.dlg.destinations_combo, self.dlg.destinations_id_combo)
+            self.ui.destinations_combo, self.ui.destinations_id_combo)
 
         self.layers = layers
 
@@ -592,46 +381,6 @@ class OTP(object):
                 old_idx = i
             id_combo.addItem(field.name())
         id_combo.setCurrentIndex(old_idx)
-
-    def set_mode_params(self, modes, mode_combo, edit_layout, help_button):
-        selected = mode_combo.currentText()
-
-        # clear layout
-        for i in reversed(list(range(edit_layout.count()))):
-            widget = edit_layout.itemAt(i).widget()
-            edit_layout.removeWidget(widget)
-            widget.setParent(None)
-
-        try: help_button.clicked.disconnect()
-        except Exception: pass
-
-
-        if selected in list(modes.keys()):
-
-            def show_help():
-                msg_box = QMessageBox(
-                    QMessageBox.Information,
-                    "Hilfe",
-                    modes[selected]["description"]
-                )
-                msg_box.exec_()
-
-            help_button.clicked.connect(show_help)
-
-            for param in modes[selected]["params"]:
-                label = QLabel(param["label"])
-                edit = QDoubleSpinBox()
-                step = param["step"] if "step" in param else 1
-                edit.setSingleStep(step)
-                if "max" in param:
-                    edit.setMaximum(param["max"])
-                if "min" in param:
-                    edit.setMinimum(param["min"])
-                if "default" in param:
-                    edit.setValue(param["default"])
-                if "decimals" in param:
-                    edit.setDecimals(param["decimals"])
-                edit_layout.addRow(label, edit)
 
     def get_widget_values(self, layout):
         '''
@@ -659,10 +408,10 @@ class OTP(object):
         #self.fill_router_combo()
 
         # show the dialog
-        self.dlg.show()
+        self.ui.show()
 
     def start_origin_destination(self):
-        if not self.dlg.router_combo.isEnabled():
+        if not self.ui.router_combo.isEnabled():
             msg_box = QMessageBox(
                 QMessageBox.Warning, "Fehler",
                 u'Es ist kein gültiger Router eingestellt')
@@ -674,35 +423,35 @@ class OTP(object):
         agg_acc = postproc['aggregation_accumulation']
         agg_acc['active'] = False
         best_of = ''
-        if self.dlg.bestof_check.isChecked():
-            best_of = self.dlg.bestof_edit.value()
+        if self.ui.bestof_check.isChecked():
+            best_of = self.ui.bestof_edit.value()
         postproc['best_of'] = best_of
-        details = self.dlg.details_check.isChecked()
+        details = self.ui.details_check.isChecked()
         postproc['details'] = details
-        dest_data = self.dlg.dest_data_check.isChecked()
+        dest_data = self.ui.dest_data_check.isChecked()
         postproc['dest_data'] = dest_data
-        if self.dlg.orig_dest_csv_check.checkState():
+        if self.ui.orig_dest_csv_check.checkState():
             file_preset = '{}-{}-{}.csv'.format(
-                self.dlg.router_combo.currentText(),
-                self.dlg.origins_combo.currentText(),
-                self.dlg.destinations_combo.currentText()
+                self.ui.router_combo.currentText(),
+                self.ui.origins_combo.currentText(),
+                self.ui.destinations_combo.currentText()
                 )
 
             file_preset = os.path.join(self.prev_directory, file_preset)
             target_file = browse_file(file_preset,
                                       u'Ergebnisse speichern unter',
-                                      CSV_FILTER, parent=self.dlg)
+                                      CSV_FILTER, parent=self.ui)
             if not target_file:
                 return
             self.prev_directory = os.path.split(target_file)[0]
         else:
             target_file = None
-        add_results = self.dlg.orig_dest_add_check.isChecked()
+        add_results = self.ui.orig_dest_add_check.isChecked()
         result_layer_name = None
         if add_results:
             preset = 'results-{}-{}'.format(
-                self.dlg.router_combo.currentText(),
-                self.dlg.origins_combo.currentText())
+                self.ui.router_combo.currentText(),
+                self.ui.origins_combo.currentText())
             result_layer_name, ok = QInputDialog.getText(
                 None, 'Layer benennen',
                 'Name der zu erzeugenden Ergebnistabelle:',
@@ -712,122 +461,6 @@ class OTP(object):
                 return
         self.call(target_file=target_file, add_results=add_results,
                   result_layer_name=result_layer_name)
-
-    def start_aggregation(self):
-        # update postprocessing settings
-        postproc = config.settings['post_processing']
-        postproc['best_of'] = ''
-        postproc['details'] = False
-        agg_acc = postproc['aggregation_accumulation']
-        agg_acc['active'] = True
-        agg_acc['mode'] = self.dlg.aggregation_mode_combo.currentText()
-        agg_acc['processed_field'] = \
-            self.dlg.aggregation_field_combo.currentText()
-        print(agg_acc['processed_field'])
-        agg_acc['params'] = self.get_widget_values(
-            self.dlg.aggregation_value_edit)
-
-        if self.dlg.aggregation_csv_check.checkState():
-            file_preset = '{}-{}-{}-aggregiert.csv'.format(
-                self.dlg.router_combo.currentText(),
-                self.dlg.origins_combo.currentText(),
-                self.dlg.destinations_combo.currentText()
-                )
-            file_preset = os.path.join(self.prev_directory, file_preset)
-            target_file = browse_file(file_preset,
-                                      u'Ergebnisse speichern unter',
-                                      CSV_FILTER, parent=self.dlg)
-            if not target_file:
-                return
-            self.prev_directory = os.path.split(target_file)[0]
-        else:
-            target_file = None
-
-        do_join = self.dlg.aggregation_join_check.isChecked()
-        self.call(target_file=target_file, join_results=do_join)
-
-    def start_accumulation(self):
-        # update postprocessing settings
-        postproc = config.settings['post_processing']
-        postproc['best_of'] = ''
-        postproc['details'] = False
-        agg_acc = postproc['aggregation_accumulation']
-        agg_acc['active'] = True
-        agg_acc['mode'] = self.dlg.accumulation_mode_combo.currentText()
-        agg_acc['processed_field'] = \
-            self.dlg.accumulation_field_combo.currentText()
-        agg_acc['params'] = self.get_widget_values(
-            self.dlg.accumulation_value_edit)
-
-        if self.dlg.accumulation_csv_check.checkState():
-            file_preset = '{}-{}-{}-akkumuliert.csv'.format(
-                self.dlg.router_combo.currentText(),
-                self.dlg.origins_combo.currentText(),
-                self.dlg.destinations_combo.currentText()
-                )
-            file_preset = os.path.join(self.prev_directory, file_preset)
-            target_file = browse_file(file_preset,
-                                      u'Ergebnisse speichern unter',
-                                      CSV_FILTER, parent=self.dlg)
-            if not target_file:
-                return
-            self.prev_directory = os.path.split(target_file)[0]
-        else:
-            target_file = None
-
-        do_join = self.dlg.accumulation_join_check.isChecked()
-        self.call(target_file=target_file, join_results=do_join)
-
-    def start_reachability(self):
-        # update postprocessing settings
-        postproc = config.settings['post_processing']
-        postproc['best_of'] = ''
-        postproc['details'] = False
-        agg_acc = postproc['aggregation_accumulation']
-        agg_acc['active'] = True
-
-        temp_dest_layer = self.layer_list[
-            self.dlg.destinations_combo.currentIndex()]
-        # duplicate destination layer
-        temp_dest_layer = self.iface.addVectorLayer(
-            temp_dest_layer.source(),
-            temp_dest_layer.name(),
-            temp_dest_layer.providerType())
-        # add virtual field with 1s as values
-        reach_field_name = 'erreichbare_Ziele'
-        agg_acc['mode'] = CALC_REACHABILITY_MODE
-        # field already exists -> try to take unique name
-        if temp_dest_layer.dataProvider().fieldNameIndex(reach_field_name) > -1:
-            reach_field_name += '_' + now_string
-        reach_field = QgsField(reach_field_name, QVariant.Int)
-        temp_dest_layer.addExpressionField('1', reach_field)
-        agg_acc['processed_field'] = reach_field_name
-        # take the set max travel time as the threshold (in seconds)
-        threshold = int(config.settings['router_config']['max_time_min']) * 60
-        agg_acc['params'] = [str(threshold)]
-
-        if self.dlg.reachability_csv_check.checkState():
-            file_preset = '{}-{}-{}-Erreichbarkeit.csv'.format(
-                self.dlg.router_combo.currentText(),
-                self.dlg.origins_combo.currentText(),
-                self.dlg.destinations_combo.currentText()
-                )
-            file_preset = os.path.join(self.prev_directory, file_preset)
-            target_file = browse_file(file_preset,
-                                      u'Ergebnisse speichern unter',
-                                      CSV_FILTER, parent=self.dlg)
-            if not target_file:
-                return
-            self.prev_directory = os.path.split(target_file)[0]
-        else:
-            target_file = None
-
-        do_join = self.dlg.reachability_join_check.isChecked()
-        self.call(target_file=target_file, destination_layer=temp_dest_layer,
-                  join_results=do_join)
-
-        #remove temporary layer
-        QgsProject.instance().removeMapLayer(temp_dest_layer.id())
 
     def call(self, target_file=None, origin_layer=None, destination_layer=None,
              add_results=False, join_results=False, result_layer_name=None):
@@ -839,15 +472,15 @@ class OTP(object):
         # LAYERS
         if origin_layer is None:
             origin_layer = self.layer_list[
-                self.dlg.origins_combo.currentIndex()]
+                self.ui.origins_combo.currentIndex()]
         if destination_layer is None:
             destination_layer = self.layer_list[
-                self.dlg.destinations_combo.currentIndex()]
+                self.ui.destinations_combo.currentIndex()]
 
         if origin_layer==destination_layer:
             msg_box = QMessageBox()
             reply = msg_box.question(
-                self.dlg,
+                self.ui,
                 'Hinweis',
                 'Die Layer mit Origins und Destinations sind identisch.\n'+
                 'Soll die Berechnung trotzdem gestartet werden?',
@@ -872,7 +505,7 @@ class OTP(object):
 
         wgs84 = QgsCoordinateReferenceSystem(4326)
         non_geom_fields = get_non_geom_indices(origin_layer)
-        selected_only = (self.dlg.selected_only_check.isChecked() and
+        selected_only = (self.ui.selected_only_check.isChecked() and
                          origin_layer.selectedFeatureCount() > 0)
         QgsVectorFileWriter.writeAsVectorFormat(
             origin_layer,
@@ -885,7 +518,7 @@ class OTP(object):
             layerOptions=["GEOMETRY=AS_YX"])
 
         non_geom_fields = get_non_geom_indices(destination_layer)
-        selected_only = (self.dlg.selected_only_check.isChecked() and
+        selected_only = (self.ui.selected_only_check.isChecked() and
                          destination_layer.selectedFeatureCount() > 0)
         QgsVectorFileWriter.writeAsVectorFormat(
             destination_layer,
@@ -923,22 +556,22 @@ class OTP(object):
             msg_box.exec_()
             return
 
-        otp_jar=self.dlg.otp_jar_edit.text()
+        otp_jar=self.ui.otp_jar_edit.text()
         if not os.path.exists(otp_jar):
             msg_box = QMessageBox(
                 QMessageBox.Warning, "Fehler",
                 u'Die angegebene OTP Datei existiert nicht!')
             msg_box.exec_()
             return
-        jython_jar=self.dlg.jython_edit.text()
+        jython_jar=self.ui.jython_edit.text()
         if not os.path.exists(jython_jar):
             msg_box = QMessageBox(
                 QMessageBox.Warning, "Fehler",
                 u'Der angegebene Jython Interpreter existiert nicht!')
             msg_box.exec_()
             return
-        java_executable = self.dlg.java_edit.text()
-        memory = self.dlg.memory_edit.value()
+        java_executable = self.ui.java_edit.text()
+        memory = self.ui.memory_edit.value()
         if not os.path.exists(java_executable):
             msg_box = QMessageBox(
                 QMessageBox.Warning, "Fehler",
@@ -986,7 +619,7 @@ class OTP(object):
             n_iterations = 1
 
         diag = ExecOTPDialog(cmd,
-                             parent=self.dlg,
+                             parent=self.ui,
                              auto_start=True,
                              n_points=n_points,
                              n_iterations=n_iterations,
@@ -1003,8 +636,8 @@ class OTP(object):
 
         if result_layer_name is None:
             result_layer_name = 'results-{}-{}'.format(
-                self.dlg.router_combo.currentText(),
-                self.dlg.origins_combo.currentText())
+                self.ui.router_combo.currentText(),
+                self.ui.origins_combo.currentText())
             result_layer_name += '-' + now_string
         # WARNING: csv layer is only link to file,
         # if temporary is removed you won't see anything later
@@ -1025,8 +658,8 @@ class OTP(object):
             origin_layer.addJoin(join)
 
     def create_router(self):
-        java_executable = self.dlg.java_edit.text()
-        otp_jar=self.dlg.otp_jar_edit.text()
+        java_executable = self.ui.java_edit.text()
+        otp_jar=self.ui.otp_jar_edit.text()
         if not os.path.exists(otp_jar):
             msg_box = QMessageBox(
                 QMessageBox.Warning, "Fehler",
@@ -1039,25 +672,30 @@ class OTP(object):
                 u'Der angegebene Java-Pfad existiert nicht!')
             msg_box.exec_()
             return
-        graph_path = self.dlg.graph_path_edit.text()
-        memory = self.dlg.memory_edit.value()
+        graph_path = self.ui.graph_path_edit.text()
+        memory = self.ui.memory_edit.value()
         diag = RouterDialog(graph_path, java_executable, otp_jar,
                             memory=memory,
-                            parent=self.dlg)
+                            parent=self.ui)
         diag.exec_()
         self.fill_router_combo()
 
-    def info(self):
-        diag = InfoDialog(parent=self.dlg)
+    def show_info(self):
+        diag = InfoDialog(parent=self.ui)
+        diag.exec_()
+
+    def show_settings(self):
+        diag = SettingsDialog(parent=self.ui)
         diag.exec_()
 
     def open_manual(self):
         webbrowser.open_new(MANUAL_URL)
 
+
 class ConfigurationControl(object):
 
-    def __init__(self, dlg):
-        self.dlg = dlg
+    def __init__(self, ui):
+        self.ui = ui
 
     def reset_to_default(self):
         '''
@@ -1072,59 +710,59 @@ class ConfigurationControl(object):
         '''
         # ORIGIN
         origin_config = config.settings['origin']
-        layer_idx = self.dlg.origins_combo.findText(origin_config['layer'])
+        layer_idx = self.ui.origins_combo.findText(origin_config['layer'])
         # layer found
         if layer_idx >= 0:
-            self.dlg.origins_combo.setCurrentIndex(layer_idx)
+            self.ui.origins_combo.setCurrentIndex(layer_idx)
             # if id is not found (returns -1) take first one (0)
-            id_idx = max(self.dlg.origins_id_combo.findText(origin_config['id_field']), 0)
-            self.dlg.origins_id_combo.setCurrentIndex(id_idx)
+            id_idx = max(self.ui.origins_id_combo.findText(origin_config['id_field']), 0)
+            self.ui.origins_id_combo.setCurrentIndex(id_idx)
         # layer not found -> take first one
         else:
-            self.dlg.origins_combo.setCurrentIndex(0)
+            self.ui.origins_combo.setCurrentIndex(0)
 
         # DESTINATION
         dest_config = config.settings['destination']
-        layer_idx = self.dlg.destinations_combo.findText(dest_config['layer'])
+        layer_idx = self.ui.destinations_combo.findText(dest_config['layer'])
         # layer found
         if layer_idx >= 0:
-            self.dlg.destinations_combo.setCurrentIndex(layer_idx)
+            self.ui.destinations_combo.setCurrentIndex(layer_idx)
             # if id is not found (returns -1) take first one (0)
-            id_idx = max(self.dlg.destinations_id_combo.findText(dest_config['id_field']), 0)
-            self.dlg.destinations_id_combo.setCurrentIndex(id_idx)
+            id_idx = max(self.ui.destinations_id_combo.findText(dest_config['id_field']), 0)
+            self.ui.destinations_id_combo.setCurrentIndex(id_idx)
         # layer not found -> take first one
         else:
-            self.dlg.destinations_combo.setCurrentIndex(0)
+            self.ui.destinations_combo.setCurrentIndex(0)
 
         # ROUTER
         graph_path = config.settings['router_config']['path']
-        self.dlg.graph_path_edit.setText(graph_path)
+        self.ui.graph_path_edit.setText(graph_path)
 
         router_config = config.settings['router_config']
         router = router_config['router']
 
         # if router is not found (returns -1) take first one (0)
-        idx = max(self.dlg.router_combo.findText(router), 0)
+        idx = max(self.ui.router_combo.findText(router), 0)
 
-        items = [self.dlg.router_combo.itemText(i) for i in range(self.dlg.router_combo.count())]
+        items = [self.ui.router_combo.itemText(i) for i in range(self.ui.router_combo.count())]
 
-        self.dlg.router_combo.setCurrentIndex(idx)
+        self.ui.router_combo.setCurrentIndex(idx)
 
-        self.dlg.max_time_edit.setValue(int(router_config['max_time_min']))
-        self.dlg.max_walk_dist_edit.setValue(int(router_config['max_walk_distance']))
-        self.dlg.walk_speed_edit.setValue(float(router_config['walk_speed']))
-        self.dlg.bike_speed_edit.setValue(float(router_config['bike_speed']))
-        self.dlg.clamp_edit.setValue(int(router_config['clamp_initial_wait_min']))
-        self.dlg.transfers_edit.setValue(int(router_config['max_transfers']))
-        self.dlg.pre_transit_edit.setValue(int(router_config['pre_transit_time_min']))
+        self.ui.max_time_edit.setValue(int(router_config['max_time_min']))
+        self.ui.max_walk_dist_edit.setValue(int(router_config['max_walk_distance']))
+        self.ui.walk_speed_edit.setValue(float(router_config['walk_speed']))
+        self.ui.bike_speed_edit.setValue(float(router_config['bike_speed']))
+        self.ui.clamp_edit.setValue(int(router_config['clamp_initial_wait_min']))
+        self.ui.transfers_edit.setValue(int(router_config['max_transfers']))
+        self.ui.pre_transit_edit.setValue(int(router_config['pre_transit_time_min']))
         wheelchair = router_config['wheel_chair_accessible'] in ['True', True]
-        self.dlg.wheelchair_check.setChecked(wheelchair)
-        self.dlg.max_slope_edit.setValue(float(router_config['max_slope']))
+        self.ui.wheelchair_check.setChecked(wheelchair)
+        self.ui.max_slope_edit.setValue(float(router_config['max_slope']))
 
         # TRAVERSE MODES
         modes = router_config['traverse_modes']
-        for index in range(self.dlg.mode_list_view.count()):
-            checkbox = self.dlg.mode_list_view.itemWidget(self.dlg.mode_list_view.item(index))
+        for index in range(self.ui.mode_list_view.count()):
+            checkbox = self.ui.mode_list_view.itemWidget(self.ui.mode_list_view.item(index))
             if str(checkbox.text()) in modes :
                 checkbox.setChecked(True)
             else:
@@ -1137,24 +775,24 @@ class ConfigurationControl(object):
             dt = datetime.strptime(times['datetime'], DATETIME_FORMAT)
         else:
             dt = datetime.now()
-        self.dlg.time_edit.setDateTime(dt)
-        self.dlg.calendar_edit.setSelectedDate(dt.date())
+        self.ui.time_edit.setDateTime(dt)
+        self.ui.calendar_edit.setSelectedDate(dt.date())
 
         time_batch = times['time_batch']
 
         smart_search = False #time_batch['smart_search'] in ['True', True]
-        self.dlg.smart_search_checkbox.setChecked(True)
+        self.ui.smart_search_checkbox.setChecked(True)
 
         if time_batch['datetime_end']:
             dt = datetime.strptime(time_batch['datetime_end'], DATETIME_FORMAT)
-        self.dlg.to_time_edit.setDateTime(dt)
+        self.ui.to_time_edit.setDateTime(dt)
         active = time_batch['active'] in ['True', True]
-        self.dlg.time_batch_checkbox.setChecked(active)
+        self.ui.time_batch_checkbox.setChecked(active)
         if time_batch['time_step']:
-            self.dlg.time_step_edit.setValue(int(time_batch['time_step']))
+            self.ui.time_step_edit.setValue(int(time_batch['time_step']))
 
         arrive_by = times['arrive_by'] in ['True', True]
-        self.dlg.arrival_checkbox.setChecked(arrive_by)
+        self.ui.arrival_checkbox.setChecked(arrive_by)
 
         # SYSTEM SETTINGS
         sys_settings = config.settings['system']
@@ -1163,11 +801,11 @@ class ConfigurationControl(object):
         otp_jar = sys_settings['otp_jar_file']
         jython_jar = sys_settings['jython_jar_file']
         java = sys_settings['java']
-        self.dlg.otp_jar_edit.setText(otp_jar)
-        self.dlg.jython_edit.setText(jython_jar)
-        self.dlg.java_edit.setText(java)
-        self.dlg.cpu_edit.setValue(n_threads)
-        self.dlg.memory_edit.setValue(memory)
+        self.ui.otp_jar_edit.setText(otp_jar)
+        self.ui.jython_edit.setText(jython_jar)
+        self.ui.java_edit.setText(java)
+        self.ui.cpu_edit.setValue(n_threads)
+        self.ui.memory_edit.setValue(memory)
 
     def update(self):
         '''
@@ -1178,63 +816,63 @@ class ConfigurationControl(object):
 
         # LAYERS
         origin_config = config.settings['origin']
-        origin_config['layer'] = self.dlg.origins_combo.currentText()
-        origin_config['id_field'] = self.dlg.origins_id_combo.currentText()
+        origin_config['layer'] = self.ui.origins_combo.currentText()
+        origin_config['id_field'] = self.ui.origins_id_combo.currentText()
         dest_config = config.settings['destination']
-        dest_config['layer'] = self.dlg.destinations_combo.currentText()
-        dest_config['id_field'] = self.dlg.destinations_id_combo.currentText()
+        dest_config['layer'] = self.ui.destinations_combo.currentText()
+        dest_config['id_field'] = self.ui.destinations_id_combo.currentText()
 
         # ROUTER
         router_config = config.settings['router_config']
-        router_config['router'] = self.dlg.router_combo.currentText()
-        router_config['max_time_min'] = self.dlg.max_time_edit.value()
-        router_config['max_walk_distance'] = self.dlg.max_walk_dist_edit.value()
-        router_config['walk_speed'] = self.dlg.walk_speed_edit.value()
-        router_config['bike_speed'] = self.dlg.bike_speed_edit.value()
-        router_config['max_transfers'] = self.dlg.transfers_edit.value()
-        router_config['pre_transit_time_min'] = self.dlg.pre_transit_edit.value()
-        router_config['wheel_chair_accessible'] = self.dlg.wheelchair_check.isChecked()
-        router_config['max_slope'] = self.dlg.max_slope_edit.value()
-        router_config['clamp_initial_wait_min'] = self.dlg.clamp_edit.value()
+        router_config['router'] = self.ui.router_combo.currentText()
+        router_config['max_time_min'] = self.ui.max_time_edit.value()
+        router_config['max_walk_distance'] = self.ui.max_walk_dist_edit.value()
+        router_config['walk_speed'] = self.ui.walk_speed_edit.value()
+        router_config['bike_speed'] = self.ui.bike_speed_edit.value()
+        router_config['max_transfers'] = self.ui.transfers_edit.value()
+        router_config['pre_transit_time_min'] = self.ui.pre_transit_edit.value()
+        router_config['wheel_chair_accessible'] = self.ui.wheelchair_check.isChecked()
+        router_config['max_slope'] = self.ui.max_slope_edit.value()
+        router_config['clamp_initial_wait_min'] = self.ui.clamp_edit.value()
 
         # TRAVERSE MODES
         selected_modes = []
-        for index in range(self.dlg.mode_list_view.count()):
-            checkbox = self.dlg.mode_list_view.itemWidget(self.dlg.mode_list_view.item(index))
+        for index in range(self.ui.mode_list_view.count()):
+            checkbox = self.ui.mode_list_view.itemWidget(self.ui.mode_list_view.item(index))
             if checkbox.isChecked():
                 selected_modes.append(str(checkbox.text()))
         router_config['traverse_modes'] = selected_modes
 
         # TIMES
         times = config.settings['time']
-        dt = self.dlg.time_edit.dateTime()
+        dt = self.ui.time_edit.dateTime()
         times['datetime'] = dt.toPyDateTime().strftime(DATETIME_FORMAT)
         time_batch = times['time_batch']
 
-        smart_search = self.dlg.smart_search_checkbox.isChecked()
+        smart_search = self.ui.smart_search_checkbox.isChecked()
         time_batch['smart_search'] = smart_search
 
-        active = self.dlg.time_batch_checkbox.isChecked()
+        active = self.ui.time_batch_checkbox.isChecked()
         time_batch['active'] = active
         end = step = ''
         if active:
-            dt = self.dlg.to_time_edit.dateTime()
+            dt = self.ui.to_time_edit.dateTime()
             end = dt.toPyDateTime().strftime(DATETIME_FORMAT)
-            step = self.dlg.time_step_edit.value()
+            step = self.ui.time_step_edit.value()
         time_batch['datetime_end'] = end
         time_batch['time_step'] = step
 
-        is_arrival = self.dlg.arrival_checkbox.isChecked()
+        is_arrival = self.ui.arrival_checkbox.isChecked()
         times['arrive_by'] = is_arrival
 
         # SYSTEM SETTINGS
         sys_settings = config.settings['system']
-        n_threads = self.dlg.cpu_edit.value()
-        memory = self.dlg.memory_edit.value()
-        otp_jar = self.dlg.otp_jar_edit.text()
-        jython_jar = self.dlg.jython_edit.text()
-        java = self.dlg.java_edit.text()
-        graph_path = self.dlg.graph_path_edit.text()
+        n_threads = self.ui.cpu_edit.value()
+        memory = self.ui.memory_edit.value()
+        otp_jar = self.ui.otp_jar_edit.text()
+        jython_jar = self.ui.jython_edit.text()
+        java = self.ui.java_edit.text()
+        graph_path = self.ui.graph_path_edit.text()
         sys_settings['n_threads'] = n_threads
         sys_settings['reserved'] = memory
         sys_settings['otp_jar_file'] = otp_jar

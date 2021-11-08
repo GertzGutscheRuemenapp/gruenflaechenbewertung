@@ -8,7 +8,6 @@ from os.path import expanduser
 
 path, f = os.path.split(os.path.realpath(__file__))
 
-MANUAL_URL = 'https://gis.ggr-planung.de/repos/qgis/OpenTripPlanner-Plugin-Anleitung.pdf'
 DEFAULT_OTP_JAR = os.path.join(path, 'otp-ggr-stable.jar')
 DEFAULT_JYTHON_PATH = os.path.join(path, 'jython-standalone-2.7.0.jar')
 DEFAULT_GRAPH_PATH = os.path.join(expanduser('~'), 'otp_graphs')
@@ -22,123 +21,6 @@ DATETIME_FORMAT = "%d/%m/%Y-%H:%M:%S" # format of time stored in xml files
 OUTPUT_DATE_FORMAT = 'dd.MM.yyyy HH:mm:ss' # format of the time in the results
 CALC_REACHABILITY_MODE = "THRESHOLD_SUM_AGGREGATOR" # agg. mode that is used to calculate number of reachable destinations (note: threshold is taken from set max travel time)
 INFINITE = 2147483647 # represents indefinite values in the UI, pyqt spin boxes are limited to max int32
-
-# needed parameters for aggregation/accumulation modes (=keys) are listed here
-# order of parameters in list has to be the same, the specific mode requires them
-AGGREGATION_MODES = {
-    "THRESHOLD_SUM_AGGREGATOR": {
-        "description": (u"Summiert die Werte der Ziele auf,\n" +
-                        u"deren Verbindungsdauer den Schwellwert\n" +
-                        u"nicht überschreitet."),
-        "params": [
-            {
-                "label": "Schwellwert (sek)", # label of the param (UI only)
-                "min": 0, # minimum value
-                "max": 24 * 60 * 60, # maximum value
-                "default": 3600, # default value
-                "step": 1, # size of steps between values
-                "decimals": 0# number of decimals
-            }
-        ]
-    },
-    "THRESHOLD_CUMMULATIVE_AGGREGATOR": {
-        "description": (u"Summiert die gewichteten Werte der Ziele auf,\n" +
-                        u"deren Verbindungsdauer t den Schwellwert s\n" +
-                        u"nicht überschreitet.\n\n" +
-                        u"Gewichtung: s - t"),
-        "params": [
-            {
-                "label": "Schwellwert (sek)",
-                "min": 0,
-                "max": 24 * 60 * 60,
-                "default": 3600,
-                "step": 1,
-                "decimals": 0
-            }
-        ]
-    },
-    "WEIGHTED_AVERAGE_AGGREGATOR": {
-        "description": (u"Bildet eine gewichtetes Mittel über die\n" +
-                        u"Werte der erreichbaren Ziele.\n\n" +
-                        u"Gewichtung: Verbindungsdauer"),
-        "params": [
-        ]
-    },
-    "DECAY_AGGREGATOR": {
-        "description": (u"Summiert die gewichteten Werte der Ziele auf,\n" +
-                        u"deren Verbindungsdauer t den Schwellwert\n" +
-                        u"nicht überschreitet.\n\n" +
-                        u"Gewichtung: e^(lambda * (t / 60))"),
-        "params": [
-            {
-                "label": "Schwellwert (sek)",
-                "min": 0,
-                "max": 24 * 60 * 60,
-                "default": 60 * 60,
-                "step": 1,
-                "decimals": 0
-            },
-            {
-                "label": "lambda",
-                "min": -10,
-                "max": 0,
-                "default": -0.1,
-                "step": 0.01,
-                "decimals": 2
-            }
-        ],
-    }
-}
-
-ACCUMULATION_MODES = {
-    "DECAY_ACCUMULATOR": {
-        "description": (u"Summiert die gewichteten Werte der Ziele auf.\n\n" +
-                        u"Gewichtung: e^(-lambda * t)\n" +
-                        u"mit lambda = 1 / (Halbwertszeit * 60)"),
-        "params": [
-            {
-                "label": "Halbwertszeit (min)",
-                "min": 1,
-                "max": 24 * 60,
-                "default": 1,
-                "step": 1,
-                "decimals": 0
-            }
-        ]
-    },
-    "THRESHOLD_ACCUMULATOR": {
-        "description": (u"Summiert die Werte der Ziele auf,\n" +
-                        u"deren Verbindungsdauer den Schwellwert\n" +
-                        u"nicht überschreitet."),
-        "params": [
-            {
-                "label": "Schwellwert (min)",
-                "min": 0,
-                "max": 24 * 60,
-                "default": 3600,
-                "step": 1,
-                "decimals": 0
-            }
-        ]
-    }
-}
-
-AVAILABLE_TRAVERSE_MODES = [
-    'WALK',
-    'TRANSIT',
-    'BICYCLE',
-    'CAR',
-    'BUS',
-    'RAIL',
-    'SUBWAY',
-    'TRAM',
-    'AIRPLANE',
-    #'CABLE_CAR', deactivated: Bug in OtpsRoutingRequest with underscores
-    'FERRY',
-    'FUNICULAR',
-    'GONDOLA',
-    #'LEG_SWITCH', deactivated: it's only used internally in OTP
-]
 
 DEFAULT_FILE = os.path.join(expanduser('~'), 'otp_config.xml')
 
@@ -160,16 +42,6 @@ setting_struct = OrderedDict([
         'jython_jar_file': DEFAULT_JYTHON_PATH,
         'java': JAVA_DEFAULT,
     }),
-    ('time', {
-        'datetime': '', # == now,
-        'arrive_by': False,
-        'time_batch': {
-            'active': False,
-            'smart_search': False,
-            'datetime_end': '',
-            'time_step': ''
-        },
-    }),
     ('router_config', {
         'path': DEFAULT_GRAPH_PATH,
         'router': '',
@@ -186,17 +58,6 @@ setting_struct = OrderedDict([
         'max_transfers': 5,
         'wheel_chair_accessible': False,
         'max_slope': 0.0833333333333
-    }),
-    ('post_processing', {
-        'best_of': '',
-        'details': False,
-        'dest_data': False,
-        'aggregation_accumulation': {
-            'active': False,
-            'mode': '',
-            'params': [],
-            'processed_field': ''
-        }
     })
 ])
 

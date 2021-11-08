@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>397</width>
-    <height>496</height>
+    <width>391</width>
+    <height>480</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -24,7 +24,7 @@
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_2">
          <item>
-          <widget class="QComboBox" name="comboBox">
+          <widget class="QComboBox" name="project_combo">
            <property name="minimumSize">
             <size>
              <width>300</width>
@@ -36,7 +36,7 @@
          <item>
           <layout class="QHBoxLayout" name="horizontalLayout_2">
            <item>
-            <widget class="QPushButton" name="pushButton_3">
+            <widget class="QPushButton" name="create_project_button">
              <property name="maximumSize">
               <size>
                <width>150</width>
@@ -49,7 +49,7 @@
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="pushButton_2">
+            <widget class="QPushButton" name="remove_project_button">
              <property name="maximumSize">
               <size>
                <width>80</width>
@@ -62,7 +62,7 @@
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="pushButton">
+            <widget class="QPushButton" name="clone_project_button">
              <property name="maximumSize">
               <size>
                <width>80</width>
@@ -110,7 +110,7 @@
        </spacer>
       </item>
       <item>
-       <widget class="QPushButton" name="start_orig_dest_button">
+       <widget class="QPushButton" name="start_calculation_button">
         <property name="minimumSize">
          <size>
           <width>200</width>
@@ -162,7 +162,7 @@
     <item row="7" column="0">
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tab_2">
        <attribute name="title">
@@ -191,37 +191,21 @@
            <string/>
           </property>
           <layout class="QGridLayout" name="gridLayout_15">
-           <item row="3" column="2">
-            <widget class="QLabel" name="label_18">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="maximumSize">
-              <size>
-               <width>20</width>
-               <height>16777215</height>
-              </size>
-             </property>
-             <property name="toolTip">
-              <string/>
-             </property>
-             <property name="text">
-              <string>m</string>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="0">
-            <widget class="QLabel" name="label_24">
+           <item row="0" column="1">
+            <widget class="QSpinBox" name="required_green_edit">
              <property name="toolTip">
               <string>maximale Distanz, die auf der Route zu Fuß zurückgelegt werden darf 
 maximal einstellbarer Wert entspricht unendlich 
 ACHTUNG: wird ignori</string>
              </property>
-             <property name="text">
-              <string>benötigte Grünfläche je Einwohner</string>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+             </property>
+             <property name="maximum">
+              <number>1000</number>
+             </property>
+             <property name="value">
+              <number>6</number>
              </property>
             </widget>
            </item>
@@ -237,6 +221,34 @@ ACHTUNG: wird ignori</string>
              </property>
              <property name="maximum">
               <number>50000</number>
+             </property>
+             <property name="value">
+              <number>500</number>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="0">
+            <widget class="QLabel" name="label_17">
+             <property name="toolTip">
+              <string>maximale Distanz, die auf der Route zu Fuß zurückgelegt werden darf 
+maximal einstellbarer Wert entspricht unendlich 
+ACHTUNG: wird ignori</string>
+             </property>
+             <property name="text">
+              <string>max. Laufdistanz</string>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="1">
+            <widget class="QSpinBox" name="project_buffer_edit">
+             <property name="toolTip">
+              <string>maximale Anzahl der Umstiege auf der Route</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+             </property>
+             <property name="maximum">
+              <number>10000</number>
              </property>
              <property name="value">
               <number>500</number>
@@ -262,6 +274,40 @@ ACHTUNG: wird ignori</string>
              </property>
              <property name="text">
               <string>m²</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="0">
+            <widget class="QLabel" name="label_24">
+             <property name="toolTip">
+              <string>maximale Distanz, die auf der Route zu Fuß zurückgelegt werden darf 
+maximal einstellbarer Wert entspricht unendlich 
+ACHTUNG: wird ignori</string>
+             </property>
+             <property name="text">
+              <string>benötigte Grünfläche je Einwohner</string>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="2">
+            <widget class="QLabel" name="label_18">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>20</width>
+               <height>16777215</height>
+              </size>
+             </property>
+             <property name="toolTip">
+              <string/>
+             </property>
+             <property name="text">
+              <string>m</string>
              </property>
             </widget>
            </item>
@@ -293,53 +339,7 @@ ACHTUNG: wird ignori</string>
               <string>maximale Anzahl der Umstiege auf der Route</string>
              </property>
              <property name="text">
-              <string>Puffer</string>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="1">
-            <widget class="QSpinBox" name="max_walk_dist_edit_2">
-             <property name="toolTip">
-              <string>maximale Distanz, die auf der Route zu Fuß zurückgelegt werden darf 
-maximal einstellbarer Wert entspricht unendlich 
-ACHTUNG: wird ignori</string>
-             </property>
-             <property name="alignment">
-              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-             </property>
-             <property name="maximum">
-              <number>50000</number>
-             </property>
-             <property name="value">
-              <number>6</number>
-             </property>
-            </widget>
-           </item>
-           <item row="3" column="0">
-            <widget class="QLabel" name="label_17">
-             <property name="toolTip">
-              <string>maximale Distanz, die auf der Route zu Fuß zurückgelegt werden darf 
-maximal einstellbarer Wert entspricht unendlich 
-ACHTUNG: wird ignori</string>
-             </property>
-             <property name="text">
-              <string>max. Laufdistanz</string>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="1">
-            <widget class="QSpinBox" name="transfers_edit">
-             <property name="toolTip">
-              <string>maximale Anzahl der Umstiege auf der Route</string>
-             </property>
-             <property name="alignment">
-              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-             </property>
-             <property name="maximum">
-              <number>10000</number>
-             </property>
-             <property name="value">
-              <number>500</number>
+              <string>Puffer um Projektgebiet</string>
              </property>
             </widget>
            </item>
@@ -391,14 +391,14 @@ ACHTUNG: wird ignori</string>
            <item row="1" column="0">
             <layout class="QHBoxLayout" name="horizontalLayout">
              <item>
-              <widget class="QPushButton" name="pushButton_4">
+              <widget class="QPushButton" name="create_router_button">
                <property name="text">
                 <string>Neu</string>
                </property>
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="pushButton_5">
+              <widget class="QPushButton" name="remove_router_button">
                <property name="maximumSize">
                 <size>
                  <width>80</width>
@@ -424,14 +424,14 @@ ACHTUNG: wird ignori</string>
               </spacer>
              </item>
              <item>
-              <widget class="QPushButton" name="pushButton_21">
+              <widget class="QPushButton" name="build_router_button">
                <property name="text">
                 <string>Neu bauen</string>
                </property>
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="pushButton_20">
+              <widget class="QPushButton" name="open_router_button">
                <property name="text">
                 <string>Ordner öffnen</string>
                </property>
@@ -613,59 +613,17 @@ ACHTUNG: wird ignori</string>
         </item>
         <item>
          <layout class="QGridLayout" name="gridLayout_3">
-          <item row="5" column="0">
-           <widget class="QLabel" name="label">
-            <property name="text">
-             <string>Eingänge der Grünflächen</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="label_4">
-            <property name="text">
-             <string>Baublöcke</string>
-            </property>
-           </widget>
-          </item>
           <item row="1" column="1">
-           <widget class="QPushButton" name="pushButton_6">
+           <widget class="QPushButton" name="import_building_blocks_button">
             <property name="text">
              <string>Import</string>
             </property>
            </widget>
           </item>
-          <item row="4" column="1">
-           <widget class="QPushButton" name="pushButton_8">
+          <item row="4" column="2">
+           <widget class="QPushButton" name="reset_green_spaces_button">
             <property name="text">
-             <string>Import</string>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="0">
-           <widget class="QLabel" name="label_3">
-            <property name="text">
-             <string>Grünflächen</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="label_2">
-            <property name="text">
-             <string>Ausgänge der Baublöcke</string>
-            </property>
-           </widget>
-          </item>
-          <item row="5" column="1">
-           <widget class="QPushButton" name="pushButton_9">
-            <property name="text">
-             <string>Import</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1">
-           <widget class="QPushButton" name="pushButton_7">
-            <property name="text">
-             <string>Import</string>
+             <string>auf Default zurücksetzen</string>
             </property>
            </widget>
           </item>
@@ -685,33 +643,88 @@ ACHTUNG: wird ignori</string>
             </property>
            </spacer>
           </item>
-          <item row="1" column="2">
-           <widget class="QPushButton" name="pushButton_16">
+          <item row="5" column="0">
+           <widget class="QLabel" name="label">
             <property name="text">
-             <string>auf Default zurücksetzen</string>
+             <string>Eingänge der Grünflächen</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QPushButton" name="import_building_exits_button">
+            <property name="text">
+             <string>Import</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="label_4">
+            <property name="text">
+             <string>Baublöcke</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="0">
+           <widget class="QLabel" name="label_3">
+            <property name="text">
+             <string>Grünflächen</string>
             </property>
            </widget>
           </item>
           <item row="2" column="2">
-           <widget class="QPushButton" name="pushButton_17">
+           <widget class="QPushButton" name="reset_building_exits_button">
             <property name="text">
              <string>auf Default zurücksetzen</string>
             </property>
            </widget>
           </item>
-          <item row="4" column="2">
-           <widget class="QPushButton" name="pushButton_18">
+          <item row="2" column="0">
+           <widget class="QLabel" name="label_2">
+            <property name="text">
+             <string>Ausgänge der Baublöcke</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QPushButton" name="reset_building_blocks_button">
             <property name="text">
              <string>auf Default zurücksetzen</string>
             </property>
            </widget>
           </item>
           <item row="5" column="2">
-           <widget class="QPushButton" name="pushButton_19">
+           <widget class="QPushButton" name="reset_green_exits_button">
             <property name="text">
              <string>auf Default zurücksetzen</string>
             </property>
            </widget>
+          </item>
+          <item row="4" column="1">
+           <widget class="QPushButton" name="import_green_spaces_button">
+            <property name="text">
+             <string>Import</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="1">
+           <widget class="QPushButton" name="import_green_exits_button">
+            <property name="text">
+             <string>Import</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="3">
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
           </item>
          </layout>
         </item>
@@ -739,7 +752,7 @@ ACHTUNG: wird ignori</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>397</width>
+     <width>391</width>
      <height>22</height>
     </rect>
    </property>
@@ -747,7 +760,7 @@ ACHTUNG: wird ignori</string>
     <property name="title">
      <string>Datei</string>
     </property>
-    <addaction name="actionEinstellungen"/>
+    <addaction name="settings_action"/>
     <addaction name="separator"/>
     <addaction name="close_action"/>
    </widget>
@@ -803,7 +816,7 @@ ACHTUNG: wird ignori</string>
     <string>Anleitung</string>
    </property>
   </action>
-  <action name="actionEinstellungen">
+  <action name="settings_action">
    <property name="text">
     <string>Einstellungen</string>
    </property>
