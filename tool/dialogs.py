@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 from builtins import str
 import os
-from PyQt5 import uic
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import uic, QtCore, QtGui, QtWidgets
 import copy, os, re, sys, datetime
 from shutil import move
 import re
@@ -10,8 +9,6 @@ import re
 # Initialize Qt resources from file resources.py
 from . import resources
 
-MAIN_FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'ui', 'OTP_main_window.ui'))
 INFO_FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'ui', 'info.ui'))
 ROUTER_FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -79,24 +76,6 @@ def parse_version(meta_file):
         if match:
             return match.group(1)
     return 'not found'
-
-
-class OTPMainWindow(QtWidgets.QMainWindow, MAIN_FORM_CLASS):
-    def __init__(self, on_close=None, parent=None):
-        """Constructor."""
-        super().__init__(parent)
-        # Set up the user interface from Designer.
-        # After setupUI you can access any designer object by doing
-        # self.<objectname>, and you can use autoconnect slots - see
-        # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
-        # #widgets-and-dialogs-with-auto-connect
-        self.setupUi(self)
-        self.on_close = on_close
-
-    def closeEvent(self, evnt):
-        if self.on_close:
-            self.on_close()
-        super().closeEvent(evnt)
 
 
 class InfoDialog(QtWidgets.QDialog, INFO_FORM_CLASS):
