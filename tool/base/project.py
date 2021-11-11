@@ -45,9 +45,9 @@ else:
     # ToDo: is there a env. path to the documents folder?
     p = os.path.expanduser('~')# , 'Library/Application Support/')
 
-APPDATA_PATH = os.path.join(p, 'Gruenflaechenbewertung')
 base_path = os.path.realpath(
     os.path.join(os.path.dirname(os.path.realpath(__file__)), '..\..'))
+APPDATA_PATH = os.path.join(p, 'Gruenflaechenbewertung')
 
 DEFAULT_OTP_JAR = os.path.join(base_path, 'lib', 'otp-ggr-stable.jar')
 DEFAULT_JYTHON_PATH = os.path.join(base_path, 'lib', 'jython-standalone-2.7.0.jar')

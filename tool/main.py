@@ -5,7 +5,7 @@ import os
 from PyQt5 import uic
 from PyQt5.QtCore import (QSettings, QTranslator, qVersion,
                           QCoreApplication, QProcess, QDateTime,
-                          QVariant, QLocale, QDate)
+                          QVariant, QLocale, QDate, QObject)
 from PyQt5.QtWidgets import (QAction, QListWidgetItem, QCheckBox,
                              QMessageBox, QLabel, QDoubleSpinBox, QMainWindow,
                              QFileDialog, QInputDialog, QLineEdit)
@@ -37,29 +37,34 @@ CSV_FILTER = u'Comma-seperated values (*.csv)'
 JAR_FILTER = u'Java Archive (*.jar)'
 ALL_FILE_FILTER = u'Java Executable (java.*)'
 
-MAIN_FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    base_path, 'ui', 'OTP_main_window.ui'))
+main_form = os.path.join(base_path, 'ui', 'OTP_main_window.ui')
 
 
-class OTPMainWindow(QMainWindow, MAIN_FORM_CLASS):
+class OTPMainWindow(QObject):
     def __init__(self, on_close=None, parent=None):
         """Constructor."""
         super().__init__(parent)
-        self.setupUi()
+
+        self.ui = QMainWindow()
+        # look for file ui folder if not found
+        uic.loadUi(main_form, self.ui)
+        #self.ui.setAllowedAreas(
+            #Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea |
+            #Qt.TopDockWidgetArea | Qt.BottomDockWidgetArea
+        #)
+        self.ui.closeEvent = self.closeEvent
         self.on_close = on_close
-        self.setWindowTitle(TITLE)
+        self.ui.setWindowTitle(TITLE)
+        self.setupUi()
 
     def closeEvent(self, evnt):
         if self.on_close:
             self.on_close()
-        super().closeEvent(evnt)
 
     def setupUi(self):
         '''
         prefill UI-elements and connect slots and signals
         '''
-        super().setupUI()
-        return
         self.ui.create_project_button.clicked.connect(self.create_project)
         self.ui.remove_project_button.clicked.connect(self.remove_project)
         self.ui.clone_project_button.clicked.connect(self.clone_project)
@@ -67,7 +72,6 @@ class OTPMainWindow(QMainWindow, MAIN_FORM_CLASS):
         self.ui.project_combo.currentIndexChanged.connect(
             lambda index: self.change_project(
                 self.ui.project_combo.itemData(index)))
-
 
         # connect menu actions
         self.ui.info_action.triggered.connect(self.show_info)
@@ -97,12 +101,6 @@ class OTPMainWindow(QMainWindow, MAIN_FORM_CLASS):
                 continue
             self.ui.project_combo.addItem(project.name, project)
         self.ui.project_combo.blockSignals(False)
-
-    # noinspection PyMethodMayBeStatic
-    def tr(self, message):
-        # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
-        return QCoreApplication.translate('OpenTripPlanner', message)
-
 
     def add_action(
         self,
@@ -619,6 +617,22 @@ class OTPMainWindow(QMainWindow, MAIN_FORM_CLASS):
     def open_manual(self):
         webbrowser.open_new(MANUAL_URL)
 
+    def close(self):
+        '''
+        override, set inactive on close
+        '''
+        try:
+            self.ui.close()
+        # ui might already be deleted by QGIS
+        except RuntimeError:
+            pass
+
+    def show(self):
+        '''
+        show the widget inside QGIS
+        '''
+        self.ui.show()
+
 
 class ConfigurationControl(object):
 
@@ -830,6 +844,7 @@ class ConfigurationControl(object):
             config.read(filename)
             self.apply()
 
+
 def browse_file(file_preset, title, file_filter, save=True, parent=None):
 
     if save:
@@ -881,4 +896,3 @@ def csv_remove_columns(csv_filename, columns):
             writer.writerow(row)
 
     os.remove(tmp_fn)
-
