@@ -7,16 +7,17 @@ from shutil import move
 import re
 
 # Initialize Qt resources from file resources.py
-from . import resources
+from gruenflaechenotp import resources
+from gruenflaechenotp.tool.base.project import base_path
 
 INFO_FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'ui', 'info.ui'))
+    base_path, 'ui', 'info.ui'))
 ROUTER_FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'ui', 'router.ui'))
+    base_path, 'ui', 'router.ui'))
 PROGRESS_FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'ui', 'progress.ui'))
+    base_path, 'ui', 'progress.ui'))
 SETTINGS_FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'ui', 'settings.ui'))
+    base_path, 'ui', 'settings.ui'))
 
 # WARNING: doesn't work in QGIS, because it doesn't support the QString module anymore (autocast to str)
 try:

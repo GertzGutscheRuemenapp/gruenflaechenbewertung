@@ -12,9 +12,10 @@ from PyQt5.QtWidgets import (QAction, QListWidgetItem, QCheckBox,
 from PyQt5.QtGui import QIcon
 from sys import platform
 
-from .config import (DATETIME_FORMAT)
-from tool.dialogs import (ExecOTPDialog, RouterDialog, InfoDialog,
-                          SettingsDialog)
+from gruenflaechenotp.tool.base.project import (DATETIME_FORMAT, settings,
+                                                base_path)
+from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, RouterDialog, InfoDialog,
+                                           SettingsDialog)
 from qgis._core import (QgsVectorLayer, QgsVectorLayerJoinInfo,
                         QgsCoordinateReferenceSystem, QgsField)
 from qgis.core import QgsVectorFileWriter, QgsProject
@@ -25,8 +26,6 @@ import csv
 import webbrowser
 
 from datetime import datetime
-
-from .config import config
 
 TITLE = "Grünflächenbewertung"
 
@@ -39,16 +38,16 @@ JAR_FILTER = u'Java Archive (*.jar)'
 ALL_FILE_FILTER = u'Java Executable (java.*)'
 
 MAIN_FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'ui', 'OTP_main_window.ui'))
+    base_path, 'ui', 'OTP_main_window.ui'))
 
 
 class OTPMainWindow(QMainWindow, MAIN_FORM_CLASS):
     def __init__(self, on_close=None, parent=None):
         """Constructor."""
         super().__init__(parent)
-        self.setupUi(self)
+        self.setupUi()
         self.on_close = on_close
-        self.ui.setWindowTitle(TITLE)
+        self.setWindowTitle(TITLE)
 
     def closeEvent(self, evnt):
         if self.on_close:
@@ -59,6 +58,7 @@ class OTPMainWindow(QMainWindow, MAIN_FORM_CLASS):
         '''
         prefill UI-elements and connect slots and signals
         '''
+        super().setupUI()
         return
         self.ui.create_project_button.clicked.connect(self.create_project)
         self.ui.remove_project_button.clicked.connect(self.remove_project)

@@ -1,7 +1,7 @@
 import os
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
-from tool.main import OTPMainWindow
+from gruenflaechenotp.tool.main import OTPMainWindow
 
 # how many results are written while running batch script
 PRINT_EVERY_N_LINES = 100
@@ -31,6 +31,7 @@ class OTP(object):
         self.menu = 'Grünflächenbewertung OTP'
         self.toolbar = self.iface.addToolBar('Grünflächenbewertung OTP')
         self.toolbar.setObjectName('Grünflächenbewertung OTP')
+        self.main_window = None
 
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
