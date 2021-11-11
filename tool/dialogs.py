@@ -3,21 +3,25 @@ from builtins import str
 import os
 from PyQt5 import uic, QtCore, QtGui, QtWidgets
 import copy, os, re, sys, datetime
+from sys import platform
 from shutil import move
 import re
 
+XML_FILTER = u'XML-Dateien (*.xml)'
+CSV_FILTER = u'Comma-seperated values (*.csv)'
+JAR_FILTER = u'Java Archive (*.jar)'
+ALL_FILE_FILTER = u'Java Executable (java.*)'
+
 # Initialize Qt resources from file resources.py
 from gruenflaechenotp import resources
-from gruenflaechenotp.tool.base.project import base_path
+from gruenflaechenotp.tool.base.project import settings, ProjectManager
 
 INFO_FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    base_path, 'ui', 'info.ui'))
+    settings.BASE_PATH, 'ui', 'info.ui'))
 ROUTER_FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    base_path, 'ui', 'router.ui'))
+    settings.BASE_PATH, 'ui', 'router.ui'))
 PROGRESS_FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    base_path, 'ui', 'progress.ui'))
-SETTINGS_FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    base_path, 'ui', 'settings.ui'))
+    settings.BASE_PATH, 'ui', 'progress.ui'))
 
 # WARNING: doesn't work in QGIS, because it doesn't support the QString module anymore (autocast to str)
 try:
@@ -79,6 +83,53 @@ def parse_version(meta_file):
     return 'not found'
 
 
+class Dialog(QtWidgets.QDialog):
+    '''
+    Dialog
+    '''
+    ui_file = ''
+    def __init__(self, ui_file: str = None, modal: bool = True,
+                 parent: QtWidgets.QWidget = None, title: str = None):
+        '''
+        Parameters
+        ----------
+        ui_file : str, optional
+            path to QT-Designer xml file to load UI of dialog from,
+            if only filename is given, the file is looked for in the standard
+            folder (UI_PATH), defaults to not using ui file
+        modal : bool, optional
+            set dialog to modal if True, not modal if False, defaults to modal
+        parent: QWidget, optional
+            parent widget, defaults to None
+        title: str, optional
+            replaces title of dialog if given, defaults to preset title
+        '''
+
+        super().__init__(parent=parent)
+        ui_file = ui_file or self.ui_file
+        if ui_file:
+            # look for file ui folder if not found
+            ui_file = ui_file if os.path.exists(ui_file) \
+                else os.path.join(settings.UI_PATH, ui_file)
+            uic.loadUi(ui_file, self)
+        if title:
+            self.setWindowTitle(title)
+        self.setModal(modal)
+        self.setupUi()
+
+    def setupUi(self):
+        '''
+        override this to set up the user interface
+        '''
+        pass
+
+    def show(self):
+        '''
+        override, show the dialog
+        '''
+        return self.exec_()
+
+
 class InfoDialog(QtWidgets.QDialog, INFO_FORM_CLASS):
     """
     Info Dialog
@@ -95,6 +146,82 @@ class InfoDialog(QtWidgets.QDialog, INFO_FORM_CLASS):
         else:
             version = '-'
         self.version_label.setText('Version ' + version)
+
+
+class NewProjectDialog(Dialog):
+    '''
+    dialog to select a layer and a name as inputs for creating a new project
+    '''
+    def __init__(self, placeholder='', **kwargs):
+        self.placeholder = placeholder
+        super().__init__(**kwargs)
+
+    def setupUi(self):
+        '''
+        set up the user interface
+        '''
+        self.setMinimumWidth(500)
+        self.setWindowTitle('Neues Projekt erstellen')
+
+        project_manager = ProjectManager()
+        self.project_names = [p.name for p in project_manager.projects]
+
+        layout = QtWidgets.QVBoxLayout(self)
+        label = QtWidgets.QLabel('Name des Projekts')
+        self.name_edit = QtWidgets.QLineEdit()
+        self.name_edit.setText(self.placeholder)
+        self.name_edit.textChanged.connect(self.validate)
+        layout.addWidget(label)
+        layout.addWidget(self.name_edit)
+
+        self.status_label = QtWidgets.QLabel()
+        layout.addWidget(self.status_label)
+
+        #spacer = QtWidgets.QSpacerItem(
+            #20, 40, QtWidgets.QSizePolicy.Minimum,
+            #QtWidgets.QSizePolicy.Expanding)
+        #layout.addItem(spacer)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel,
+            QtCore.Qt.Horizontal, self)
+        self.ok_button = buttons.button(QtWidgets.QDialogButtonBox.Ok)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.validate()
+
+    def validate(self):
+        '''
+        validate current input of name and layer, set the status label according
+        to validation result
+        '''
+        name = str(self.name_edit.text())
+        status_text = ''
+        regexp = re.compile('[\\\/\:*?\"\'<>|]')
+        error = False
+        if name and regexp.search(name):
+            status_text = ('Der Projektname darf keines der folgenden Zeichen '
+                           'enthalten: \/:*?"\'<>|')
+            error = True
+        elif name in self.project_names:
+            status_text = (
+                f'Ein Projekt mit dem Namen {name} existiert bereits!\n'
+                'Projektnamen müssen einzigartig sein.')
+            error = True
+
+        self.status_label.setText(status_text)
+
+        self.ok_button.setEnabled(not error and len(name) > 0)
+
+    def show(self):
+        '''
+        show dialog and return selections made by user
+        '''
+        confirmed = self.exec_()
+        if confirmed:
+            return confirmed, self.name_edit.text()
+        return False, None
 
 
 class ProgressDialog(QtWidgets.QDialog, PROGRESS_FORM_CLASS):
@@ -389,59 +516,55 @@ class RouterDialog(QtWidgets.QDialog, ROUTER_FORM_CLASS):
         diag.exec_()
 
 
-class SettingsDialog(QtWidgets.QDialog, SETTINGS_FORM_CLASS):
-    def __init__(self, parent=None):
-        super().__init__(parent=parent)
-        self.parent = parent
-        self.setupUi(self)
+class SettingsDialog(Dialog):
+    ui_file = 'settings.ui'
+
+    def setupUi(self):
         self.button_box.accepted.connect(self.save)
         self.button_box.accepted.connect(self.close)
+        self.otp_jar_browse_button.clicked.connect(
+            lambda: self.browse_jar(self.otp_jar_edit, 'OTP JAR wählen'))
+        self.jython_browse_button.clicked.connect(
+            lambda: self.browse_jar(self.jython_edit,
+                                    'Jython Standalone JAR wählen'))
+        self.graph_path_browse_button.clicked.connect(
+            lambda: self.browse_path(self.graph_path_edit,
+                                     'OTP Router Verzeichnis wählen'))
+        self.project_path_browse_button.clicked.connect(
+            lambda: self.browse_path(self.project_path_edit,
+                                     'Projektverzeichnis wählen'))
+        self.java_browse_button.clicked.connect(self.browse_java)
+        self.search_java_button.clicked.connect(self.auto_java)
+        self.reset_button.clicked.connect(self.reset)
+        self.load_settings()
 
-    def save():
-        pass
+    def load_settings(self):
+        self.project_path_edit.setText(settings.project_path)
+        self.graph_path_edit.setText(settings.graph_path)
 
+        self.java_edit.setText(settings.system['java'])
+        self.jython_edit.setText(settings.system['jython_jar_file'])
+        self.otp_jar_edit.setText(settings.system['otp_jar_file'])
+        self.cpu_edit.setValue(settings.system['n_threads'])
+        self.memory_edit.setValue(settings.system['reserved'])
 
-    #def setupUi(self):
-        #super().setupUi()
-        #def browse_jar(edit, text):
-            #jar_file = browse_file(edit.text(),
-                                   #text, JAR_FILTER,
-                                   #save=False, parent=self.ui)
-            #if not jar_file:
-                #return
-            #edit.setText(jar_file)
+    def save(self):
+        settings.project_path = self.project_path_edit.text()
+        settings.graph_path = self.graph_path_edit.text()
 
-        #self.ui.otp_jar_browse_button.clicked.connect(
-            #lambda: browse_jar(self.ui.otp_jar_edit,
-                               #u'OTP JAR wählen'))
-        #self.ui.jython_browse_button.clicked.connect(
-            #lambda: browse_jar(self.ui.jython_edit,
-                               #u'Jython Standalone JAR wählen'))
+        settings.system['java'] = self.java_edit.text()
+        settings.system['jython_jar_file'] = self.jython_edit.text()
+        settings.system['otp_jar_file'] = self.otp_jar_edit.text()
+        settings.system['n_threads'] = self.cpu_edit.value()
+        settings.system['reserved'] = self.memory_edit.value()
 
-        #def browse_graph_path():
-            #path = str(QFileDialog.getExistingDirectory(
-                #self.ui, u'OTP Router Verzeichnis wählen',
-                #self.ui.graph_path_edit.text()))
-            #if not path:
-                #return
-            #self.ui.graph_path_edit.setText(path)
-            #self.fill_router_combo()
+        settings.write()
 
-        #self.ui.graph_path_browse_button.clicked.connect(browse_graph_path)
+    def reset(self):
+        settings.reset_to_defaults()
+        self.load_settings()
 
-        #def browse_java():
-            #java_file = browse_file(self.ui.java_edit.text(),
-                                    #'Java Version 1.8 wählen',
-                                    #ALL_FILE_FILTER, save=False,
-                                    #parent=self.ui)
-            #if not java_file:
-                #return
-            #self.ui.java_edit.setText(java_file)
-        #self.ui.java_browse_button.clicked.connect(browse_java)
-
-        #self.ui.search_java_button.clicked.connect(self.auto_java)
-
-    def auto_java():
+    def auto_java(self):
         '''
         you don't have access to the environment variables of the system,
         use some tricks depending on the system
@@ -483,10 +606,53 @@ class SettingsDialog(QtWidgets.QDialog, SETTINGS_FORM_CLASS):
             if os.path.exists(path):
                 java_file = path
         if java_file:
-            self.ui.java_edit.setText(java_file)
+            self.java_edit.setText(java_file)
         else:
-            msg_box = QMessageBox(
-                QMessageBox.Warning, "Fehler",
+            msg_box = QtWidgets.QMessageBox(
+                QtWidgets.QMessageBox.Warning, "Fehler",
                 u'Die automatische Suche nach Java 1.8 ist fehlgeschlagen. '
                 'Bitte suchen Sie die ausführbare Datei manuell.')
             msg_box.exec_()
+
+
+    def browse_java(self):
+        java_file = browse_file(self.java_edit.text(),
+                                'Java Version 1.8 wählen',
+                                ALL_FILE_FILTER, save=False,
+                                parent=self)
+        if not java_file:
+            return
+        self.java_edit.setText(java_file)
+
+    def browse_jar(self, edit, text):
+        jar_file = browse_file(edit.text(),
+                               text, JAR_FILTER,
+                               save=False, parent=self)
+        if not jar_file:
+            return
+        edit.setText(jar_file)
+
+    def browse_path(self, edit, text):
+        path = str(QtWidgets.QFileDialog.getExistingDirectory(
+            self, text, edit.text()))
+        if not path:
+            return
+        edit.setText(path)
+
+
+def browse_file(file_preset, title, file_filter, save=True, parent=None):
+
+    if save:
+        browse_func = QtWidgets.QFileDialog.getSaveFileName
+    else:
+        browse_func = QtWidgets.QFileDialog.getOpenFileName
+
+    filename = str(
+        browse_func(
+            parent=parent,
+            caption=title,
+            directory=file_preset,
+            filter=file_filter
+        )[0]
+    )
+    return filename

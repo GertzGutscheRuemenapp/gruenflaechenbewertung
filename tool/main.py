@@ -12,10 +12,10 @@ from PyQt5.QtWidgets import (QAction, QListWidgetItem, QCheckBox,
 from PyQt5.QtGui import QIcon
 from sys import platform
 
-from gruenflaechenotp.tool.base.project import (DATETIME_FORMAT, settings,
-                                                base_path)
+from gruenflaechenotp.tool.base.project import (ProjectManager, settings)
 from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, RouterDialog, InfoDialog,
-                                           SettingsDialog)
+                                           SettingsDialog, NewProjectDialog)
+from gruenflaechenotp.tool.base.database import Workspace
 from qgis._core import (QgsVectorLayer, QgsVectorLayerJoinInfo,
                         QgsCoordinateReferenceSystem, QgsField)
 from qgis.core import QgsVectorFileWriter, QgsProject
@@ -31,13 +31,7 @@ TITLE = "Grünflächenbewertung"
 
 # how many results are written while running batch script
 PRINT_EVERY_N_LINES = 100
-
-XML_FILTER = u'XML-Dateien (*.xml)'
-CSV_FILTER = u'Comma-seperated values (*.csv)'
-JAR_FILTER = u'Java Archive (*.jar)'
-ALL_FILE_FILTER = u'Java Executable (java.*)'
-
-main_form = os.path.join(base_path, 'ui', 'OTP_main_window.ui')
+main_form = os.path.join(settings.UI_PATH, 'OTP_main_window.ui')
 
 
 class OTPMainWindow(QObject):
@@ -46,13 +40,14 @@ class OTPMainWindow(QObject):
         super().__init__(parent)
 
         self.ui = QMainWindow()
-        # look for file ui folder if not found
         uic.loadUi(main_form, self.ui)
-        #self.ui.setAllowedAreas(
-            #Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea |
-            #Qt.TopDockWidgetArea | Qt.BottomDockWidgetArea
-        #)
-        self.ui.closeEvent = self.closeEvent
+        self.project_manager = ProjectManager()
+        graph_path = self.project_manager.settings.graph_path
+        if graph_path and not os.path.exists(graph_path):
+            try:
+                os.makedirs(graph_path)
+            except:
+                pass
         self.on_close = on_close
         self.ui.setWindowTitle(TITLE)
         self.setupUi()
@@ -81,20 +76,21 @@ class OTPMainWindow(QObject):
 
         # router
         #self.fill_router_combo()
-        #self.setup_projects()
+        self.setup_projects()
 
     def setup_projects(self):
         '''
         fill project combobox with available projects
         '''
+        self.ui.tabWidget.setEnabled(False)
+        self.ui.start_calculation_button.setEnabled(False)
+
         self.project_manager.active_project = None
 
         self.ui.project_combo.blockSignals(True)
         self.ui.project_combo.clear()
         self.ui.project_combo.addItem('Projekt wählen')
         self.ui.project_combo.model().item(0).setEnabled(False)
-        self.ui.domain_button.setEnabled(False)
-        self.ui.definition_button.setEnabled(False)
         self.project_manager.reset_projects()
         for project in self.project_manager.projects:
             if project.name == '__test__':
@@ -102,117 +98,93 @@ class OTPMainWindow(QObject):
             self.ui.project_combo.addItem(project.name, project)
         self.ui.project_combo.blockSignals(False)
 
-    def add_action(
-        self,
-        icon_path,
-        text,
-        callback,
-        enabled_flag=True,
-        add_to_menu=True,
-        add_to_toolbar=True,
-        status_tip=None,
-        whats_this=None,
-        parent=None):
-
-        icon = QIcon(icon_path)
-        action = QAction(icon, text, parent)
-        action.triggered.connect(callback)
-        action.setEnabled(enabled_flag)
-
-        if status_tip is not None:
-            action.setStatusTip(status_tip)
-
-        if whats_this is not None:
-            action.setWhatsThis(whats_this)
-
-        if add_to_toolbar:
-            self.toolbar.addAction(action)
-
-        if add_to_menu:
-            self.iface.addPluginToMenu(
-                self.menu,
-                action)
-
-        self.actions.append(action)
-
-        return action
-
-    def initGui(self):
-        """Create the menu entries and toolbar icons inside the QGIS GUI."""
-
-        icon_path = ':/plugins/OTP/icon.png'
-        self.add_action(
-            icon_path,
-            text=self.tr(u'OpenTripPlanner'),
-            callback=self.run,
-            parent=self.iface.mainWindow())
-
     def create_project(self):
-        pass
+        '''
+        Open a dialog for setting up a new project and create the project
+        based on this setup. Automatically set the new project as active project
+        if successfully created
+        '''
+        dialog = NewProjectDialog()
+        ok, project_name = dialog.show()
 
-    def remove_project(self):
-        pass
+        if ok:
+            project = self.project_manager.create_project(project_name)
+            self.project_manager.active_project = project
+            self.ui.project_combo.addItem(project.name, project)
+            self.ui.project_combo.setCurrentIndex(
+                self.ui.project_combo.count() - 1)
 
     def clone_project(self):
-        pass
-
-    def change_project(self):
-        pass
-
-    def unload(self):
-        """Removes the plugin menu item and icon from QGIS GUI."""
-        for action in self.actions:
-            self.iface.removePluginMenu(
-                self.tr(u'&OpenTripPlanner'),
-                action)
-            self.iface.removeToolBarIcon(action)
-        # remove the toolbar
-        del self.toolbar
-
-    def set_date(self, time=None):
-        date = self.ui.calendar_edit.selectedDate()
-        # ToDo: if focus of user was on to_time, only change value in this one
-        # but way below won't work, because focus changes, when calendar is
-        # clicked
-        #if self.dlg.to_time_edit.hasFocus():
-            #self.dlg.to_time_edit.setDate(date)
-        #else:
-            #self.dlg.time_edit.setDate(date)
-        self.ui.to_time_edit.setDate(date)
-        self.ui.time_edit.setDate(date)
-        if time:
-            if isinstance(time, QDate):
-                time = QDateTime(time).time()
-            # QDate is lacking a time, so don't set it (only if QDateTime is)
-            else:
-                self.ui.time_edit.setTime(time)
-            self.ui.to_time_edit.setTime(time)
-
-    def toggle_arrival(self):
         '''
-        enable/disable tabs, depending on whether arrival is checked or not
+        clone the currently selected project
         '''
-        is_arrival = self.ui.arrival_checkbox.checkState()
-        acc_idx = self.ui.calculation_tabs.indexOf(self.ui.accumulation_tab)
-        agg_idx = self.ui.calculation_tabs.indexOf(self.ui.aggregation_tab)
-        reach_idx = self.ui.calculation_tabs.indexOf(self.ui.reachability_tab)
-        acc_enabled = agg_enabled = reach_enabled = False
+        project = self.project_manager.active_project
+        if not project:
+            return
+        dialog = NewProjectDialog(placeholder=f'{project.name}_kopie')
+        ok, project_name = dialog.show()
 
-        if is_arrival:
-            acc_enabled = True
-            left_text = u'früheste Abfahrt'
-            right_text = u'min vor Ankunftszeit'
-        else:
-            agg_enabled = reach_enabled = True
-            left_text = u'späteste Ankunft'
-            right_text = u'min nach Abfahrtszeit'
+        if ok:
+            return
+            job = CloneProject(name, project, parent=self.ui)
+            def on_success(project):
+                self.ui.project_combo.addItem(project.name, project)
+                self.ui.project_combo.setCurrentIndex(
+                    self.ui.project_combo.count() - 1)
+                self.project_manager.active_project = project
 
-        self.ui.max_time_label_left.setText(left_text)
-        self.ui.max_time_label_right.setText(right_text)
+            dialog = ProgressDialog(job, parent=self.ui,
+                                    on_success=on_success)
+            dialog.show()
 
-        self.ui.calculation_tabs.setTabEnabled(acc_idx, acc_enabled)
-        self.ui.calculation_tabs.setTabEnabled(agg_idx, agg_enabled)
-        self.ui.calculation_tabs.setTabEnabled(reach_idx, reach_enabled)
+    def remove_project(self):
+        '''
+        remove the currently selected project
+        '''
+        project = self.project_manager.active_project
+        if not project:
+            return
+        reply = QMessageBox.question(
+            self.ui, 'Projekt entfernen',
+            f'Soll das Projekt "{project.name}" entfernt werden?\n'
+            '(alle Projektdaten werden gelöscht)',
+             QMessageBox.Yes, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            idx = self.ui.project_combo.currentIndex()
+            if self.active_dockwidget:
+                self.active_dockwidget.close()
+            self.ui.project_combo.setCurrentIndex(0)
+            self.ui.project_combo.removeItem(idx)
+            instances = list(Workspace.get_instances())
+            for ws in instances:
+                # close all writable workspaces (read_only indicate the
+                # base data)
+                # ToDo: adress project workspaces somehow else
+                if not ws.database.read_only:
+                    ws.close()
+            # close and remove layers in project group (in TOC)
+            qgisproject = QgsProject.instance()
+            root = qgisproject.layerTreeRoot()
+            project_group = root.findGroup(project.groupname)
+            if project_group:
+                for layer in project_group.findLayers():
+                    qgisproject.removeMapLayer(layer.layerId())
+                project_group.removeAllChildren()
+                root.removeChildNode(project_group)
+            # wait for canvas to refresh because it blocks the datasources for
+            # the layers as long they are visible
+            def on_refresh():
+                self.project_manager.remove_project(project)
+                self.project_manager.active_project = None
+                self.canvas.mapCanvasRefreshed.disconnect(on_refresh)
+            self.canvas.mapCanvasRefreshed.connect(on_refresh)
+            self.canvas.refreshAllLayers()
+
+    def change_project(self, project):
+        self.project_manager.active_project = project
+        self.ui.tabWidget.setEnabled(True)
+        # ToDo: load layers and settings
+        pass
 
     def fill_router_combo(self):
         # try to keep old router selected
@@ -238,103 +210,6 @@ class OTPMainWindow(QObject):
             self.ui.router_combo.setEnabled(True)
             self.ui.create_router_button.setEnabled(True)
         self.ui.router_combo.setCurrentIndex(idx)
-
-    def fill_layer_combos(self, layers=None):
-        '''
-        fill the combo boxes for selection of origin/destination layers with all
-        available vector-layers.
-        keep selections of previously selected layers, if possible
-        '''
-        if not layers:
-            layers = [layer for layer in QgsProject.instance().mapLayers().values()]
-        old_origin_layer = None
-        old_destination_layer = None
-        if len(self.layer_list) > 0:
-            old_origin_layer = self.layer_list[
-                self.ui.origins_combo.currentIndex()]
-            old_destination_layer = self.layer_list[
-                self.ui.destinations_combo.currentIndex()]
-
-        self.layer_list = []
-        self.ui.origins_combo.clear()
-        self.ui.destinations_combo.clear()
-        old_origin_idx = 0
-        old_destination_idx = 0
-        i = 0 # counter for QgsVectorLayers
-        for layer in layers:
-            if isinstance(layer, QgsVectorLayer):
-                if layer == old_origin_layer:
-                    old_origin_idx = i
-                if layer == old_destination_layer:
-                    old_destination_idx = i
-                self.layer_list.append(layer)
-                self.ui.origins_combo.addItem(layer.name())
-                self.ui.destinations_combo.addItem(layer.name())
-                i += 1
-
-        # select active layer in comboboxes
-        self.ui.origins_combo.setCurrentIndex(old_origin_idx)
-        self.ui.destinations_combo.setCurrentIndex(old_destination_idx)
-
-        # fill ids although there is already a signal/slot connection
-        # (in __init__) to do this,
-        # but if index doesn't change (idx == 0), signal doesn't fire (
-        # so it maybe is done twice, but this is not performance-relevant)
-        self.fill_id_combo(self.ui.origins_combo, self.ui.origins_id_combo)
-        self.fill_id_combo(
-            self.ui.destinations_combo, self.ui.destinations_id_combo)
-
-        self.layers = layers
-
-    def fill_id_combo(self, layer_combo, id_combo):
-        '''
-        fill a combo box (id_combo) with all fields of the currently selected
-        layer in the given layer_combo.
-        tries to keep same field as selected before
-        WARNING: does not keep same field selected if layers are changed and
-        rerun
-        '''
-        old_id_field = id_combo.currentText()
-        id_combo.clear()
-        if (len(self.layer_list) == 0 or
-            (layer_combo.currentIndex() >= len(self.layer_list))):
-            return
-        layer = self.layer_list[layer_combo.currentIndex()]
-        fields = layer.fields()
-        old_idx = 0
-        for i, field in enumerate(fields):
-            if field.name() == old_id_field:
-                old_idx = i
-            id_combo.addItem(field.name())
-        id_combo.setCurrentIndex(old_idx)
-
-    def get_widget_values(self, layout):
-        '''
-        returns all currently set values in child widgets of given layout
-        '''
-        params = []
-        for i in range(layout.count()):
-            widget = layout.itemAt(i).widget()
-            if isinstance(widget, QDoubleSpinBox):
-                params.append(str(widget.value()))
-        return params
-
-    def run(self):
-        '''
-        called every time, the plugin is (re)started (so don't connect slots
-        to signals here, otherwise they may be connected multiple times)
-        '''
-
-        ## reload layer combos, if layers changed on rerun
-        #layers = [layer for layer in QgsProject.instance().mapLayers().values()]
-        #if layers != self.layers:
-            #self.fill_layer_combos()
-
-        ## reload routers on every run (they might be changed outside)
-        #self.fill_router_combo()
-
-        # show the dialog
-        self.ui.show()
 
     def start_origin_destination(self):
         if not self.ui.router_combo.isEnabled():
@@ -390,7 +265,7 @@ class OTPMainWindow(QObject):
 
     def call(self, target_file=None, origin_layer=None, destination_layer=None,
              add_results=False, join_results=False, result_layer_name=None):
-        now_string = datetime.now().strftime(DATETIME_FORMAT)
+        now_string = datetime.now().strftime(settings.DATETIME_FORMAT)
 
         # update settings and save them
         self.save()
@@ -633,234 +508,6 @@ class OTPMainWindow(QObject):
         '''
         self.ui.show()
 
-
-class ConfigurationControl(object):
-
-    def __init__(self, ui):
-        self.ui = ui
-
-    def reset_to_default(self):
-        '''
-        reset Config.settings to default
-        '''
-        config.reset()
-        self.apply()
-
-    def apply(self):
-        '''
-        change state of UI (checkboxes, comboboxes) according to the Config.settings
-        '''
-        # ORIGIN
-        origin_config = config.settings['origin']
-        layer_idx = self.ui.origins_combo.findText(origin_config['layer'])
-        # layer found
-        if layer_idx >= 0:
-            self.ui.origins_combo.setCurrentIndex(layer_idx)
-            # if id is not found (returns -1) take first one (0)
-            id_idx = max(self.ui.origins_id_combo.findText(origin_config['id_field']), 0)
-            self.ui.origins_id_combo.setCurrentIndex(id_idx)
-        # layer not found -> take first one
-        else:
-            self.ui.origins_combo.setCurrentIndex(0)
-
-        # DESTINATION
-        dest_config = config.settings['destination']
-        layer_idx = self.ui.destinations_combo.findText(dest_config['layer'])
-        # layer found
-        if layer_idx >= 0:
-            self.ui.destinations_combo.setCurrentIndex(layer_idx)
-            # if id is not found (returns -1) take first one (0)
-            id_idx = max(self.ui.destinations_id_combo.findText(dest_config['id_field']), 0)
-            self.ui.destinations_id_combo.setCurrentIndex(id_idx)
-        # layer not found -> take first one
-        else:
-            self.ui.destinations_combo.setCurrentIndex(0)
-
-        # ROUTER
-        graph_path = config.settings['router_config']['path']
-        self.ui.graph_path_edit.setText(graph_path)
-
-        router_config = config.settings['router_config']
-        router = router_config['router']
-
-        # if router is not found (returns -1) take first one (0)
-        idx = max(self.ui.router_combo.findText(router), 0)
-
-        items = [self.ui.router_combo.itemText(i) for i in range(self.ui.router_combo.count())]
-
-        self.ui.router_combo.setCurrentIndex(idx)
-
-        self.ui.max_time_edit.setValue(int(router_config['max_time_min']))
-        self.ui.max_walk_dist_edit.setValue(int(router_config['max_walk_distance']))
-        self.ui.walk_speed_edit.setValue(float(router_config['walk_speed']))
-        self.ui.bike_speed_edit.setValue(float(router_config['bike_speed']))
-        self.ui.clamp_edit.setValue(int(router_config['clamp_initial_wait_min']))
-        self.ui.transfers_edit.setValue(int(router_config['max_transfers']))
-        self.ui.pre_transit_edit.setValue(int(router_config['pre_transit_time_min']))
-        wheelchair = router_config['wheel_chair_accessible'] in ['True', True]
-        self.ui.wheelchair_check.setChecked(wheelchair)
-        self.ui.max_slope_edit.setValue(float(router_config['max_slope']))
-
-        # TRAVERSE MODES
-        modes = router_config['traverse_modes']
-        for index in range(self.ui.mode_list_view.count()):
-            checkbox = self.ui.mode_list_view.itemWidget(self.ui.mode_list_view.item(index))
-            if str(checkbox.text()) in modes :
-                checkbox.setChecked(True)
-            else:
-                checkbox.setChecked(False)
-
-        # TIMES
-        times = config.settings['time']
-
-        if times['datetime']:
-            dt = datetime.strptime(times['datetime'], DATETIME_FORMAT)
-        else:
-            dt = datetime.now()
-        self.ui.time_edit.setDateTime(dt)
-        self.ui.calendar_edit.setSelectedDate(dt.date())
-
-        time_batch = times['time_batch']
-
-        smart_search = False #time_batch['smart_search'] in ['True', True]
-        self.ui.smart_search_checkbox.setChecked(True)
-
-        if time_batch['datetime_end']:
-            dt = datetime.strptime(time_batch['datetime_end'], DATETIME_FORMAT)
-        self.ui.to_time_edit.setDateTime(dt)
-        active = time_batch['active'] in ['True', True]
-        self.ui.time_batch_checkbox.setChecked(active)
-        if time_batch['time_step']:
-            self.ui.time_step_edit.setValue(int(time_batch['time_step']))
-
-        arrive_by = times['arrive_by'] in ['True', True]
-        self.ui.arrival_checkbox.setChecked(arrive_by)
-
-        # SYSTEM SETTINGS
-        sys_settings = config.settings['system']
-        n_threads = int(sys_settings['n_threads'])
-        memory = int(sys_settings['reserved'])
-        otp_jar = sys_settings['otp_jar_file']
-        jython_jar = sys_settings['jython_jar_file']
-        java = sys_settings['java']
-        self.ui.otp_jar_edit.setText(otp_jar)
-        self.ui.jython_edit.setText(jython_jar)
-        self.ui.java_edit.setText(java)
-        self.ui.cpu_edit.setValue(n_threads)
-        self.ui.memory_edit.setValue(memory)
-
-    def update(self):
-        '''
-        update Config.settings according to the current state of the UI (checkboxes etc.)
-        post processing not included! only written to config before calling otp (in call_otp()),
-        because not relevant for UI (meaning it is set to default on startup)
-        '''
-
-        # LAYERS
-        origin_config = config.settings['origin']
-        origin_config['layer'] = self.ui.origins_combo.currentText()
-        origin_config['id_field'] = self.ui.origins_id_combo.currentText()
-        dest_config = config.settings['destination']
-        dest_config['layer'] = self.ui.destinations_combo.currentText()
-        dest_config['id_field'] = self.ui.destinations_id_combo.currentText()
-
-        # ROUTER
-        router_config = config.settings['router_config']
-        router_config['router'] = self.ui.router_combo.currentText()
-        router_config['max_time_min'] = self.ui.max_time_edit.value()
-        router_config['max_walk_distance'] = self.ui.max_walk_dist_edit.value()
-        router_config['walk_speed'] = self.ui.walk_speed_edit.value()
-        router_config['bike_speed'] = self.ui.bike_speed_edit.value()
-        router_config['max_transfers'] = self.ui.transfers_edit.value()
-        router_config['pre_transit_time_min'] = self.ui.pre_transit_edit.value()
-        router_config['wheel_chair_accessible'] = self.ui.wheelchair_check.isChecked()
-        router_config['max_slope'] = self.ui.max_slope_edit.value()
-        router_config['clamp_initial_wait_min'] = self.ui.clamp_edit.value()
-
-        # TRAVERSE MODES
-        selected_modes = []
-        for index in range(self.ui.mode_list_view.count()):
-            checkbox = self.ui.mode_list_view.itemWidget(self.ui.mode_list_view.item(index))
-            if checkbox.isChecked():
-                selected_modes.append(str(checkbox.text()))
-        router_config['traverse_modes'] = selected_modes
-
-        # TIMES
-        times = config.settings['time']
-        dt = self.ui.time_edit.dateTime()
-        times['datetime'] = dt.toPyDateTime().strftime(DATETIME_FORMAT)
-        time_batch = times['time_batch']
-
-        smart_search = self.ui.smart_search_checkbox.isChecked()
-        time_batch['smart_search'] = smart_search
-
-        active = self.ui.time_batch_checkbox.isChecked()
-        time_batch['active'] = active
-        end = step = ''
-        if active:
-            dt = self.ui.to_time_edit.dateTime()
-            end = dt.toPyDateTime().strftime(DATETIME_FORMAT)
-            step = self.ui.time_step_edit.value()
-        time_batch['datetime_end'] = end
-        time_batch['time_step'] = step
-
-        is_arrival = self.ui.arrival_checkbox.isChecked()
-        times['arrive_by'] = is_arrival
-
-        # SYSTEM SETTINGS
-        sys_settings = config.settings['system']
-        n_threads = self.ui.cpu_edit.value()
-        memory = self.ui.memory_edit.value()
-        otp_jar = self.ui.otp_jar_edit.text()
-        jython_jar = self.ui.jython_edit.text()
-        java = self.ui.java_edit.text()
-        graph_path = self.ui.graph_path_edit.text()
-        sys_settings['n_threads'] = n_threads
-        sys_settings['reserved'] = memory
-        sys_settings['otp_jar_file'] = otp_jar
-        sys_settings['jython_jar_file'] = jython_jar
-        sys_settings['java'] = java
-        config.settings['router_config']['path'] = graph_path
-
-    def save(self):
-        config.write()
-
-    def save_as(self):
-        '''
-        save config in selectable file
-        '''
-        filename = browse_file('', 'Einstellungen speichern unter', XML_FILTER)
-        if filename:
-            self.update()
-            config.write(filename)
-
-    def read(self):
-        '''
-        read config from selectable file
-        '''
-        filename = browse_file('', 'Einstellungen aus Datei laden',
-                               XML_FILTER, save=False)
-        if filename:
-            config.read(filename)
-            self.apply()
-
-
-def browse_file(file_preset, title, file_filter, save=True, parent=None):
-
-    if save:
-        browse_func = QFileDialog.getSaveFileName
-    else:
-        browse_func = QFileDialog.getOpenFileName
-
-    filename = str(
-        browse_func(
-            parent=parent,
-            caption=title,
-            directory=file_preset,
-            filter=file_filter
-        )[0]
-    )
-    return filename
 
 def get_geometry_fields(layer):
     '''return the names of the geometry fields of a given layer'''

@@ -11,6 +11,8 @@ CSV_FILTER = u'Comma-seperated values (*.csv)'
 JAR_FILTER = u'Java Archive (*.jar)'
 ALL_FILE_FILTER = u'Java Executable (java.*)'
 
+PLUGIN_TITLE = 'Grünflächenbewertung OTP'
+
 
 class OTP(object):
     """QGIS Plugin Implementation."""
@@ -27,10 +29,9 @@ class OTP(object):
         self.iface = iface
 
         # Declare instance attributes
-        self.actions = []
-        self.menu = 'Grünflächenbewertung OTP'
-        self.toolbar = self.iface.addToolBar('Grünflächenbewertung OTP')
-        self.toolbar.setObjectName('Grünflächenbewertung OTP')
+        self.menu = PLUGIN_TITLE
+        self.toolbar = self.iface.addToolBar(PLUGIN_TITLE)
+        self.toolbar.setObjectName(PLUGIN_TITLE)
         self.main_window = None
 
     def initGui(self):
@@ -38,7 +39,7 @@ class OTP(object):
 
         icon_path = ':/plugins/OTP/icon.png'
         icon = QIcon(icon_path)
-        self.action = QAction(icon, 'Grünflächenbewertung OTP',
+        self.action = QAction(icon, PLUGIN_TITLE,
                               self.iface.mainWindow())
         self.action.triggered.connect(lambda: self.run())
         self.toolbar.addAction(self.action)
@@ -46,9 +47,8 @@ class OTP(object):
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
-        for action in self.actions:
-            self.iface.removePluginMenu('OpenTripPlanner', action)
-            self.iface.removeToolBarIcon(action)
+        self.iface.removePluginMenu(PLUGIN_TITLE, self.action)
+        self.iface.removeToolBarIcon(self.action)
         # remove the toolbar
         del self.toolbar
         if self.main_window:

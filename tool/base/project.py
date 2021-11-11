@@ -45,31 +45,25 @@ else:
     # ToDo: is there a env. path to the documents folder?
     p = os.path.expanduser('~')# , 'Library/Application Support/')
 
-base_path = os.path.realpath(
+BASE_PATH = os.path.realpath(
     os.path.join(os.path.dirname(os.path.realpath(__file__)), '..\..'))
 APPDATA_PATH = os.path.join(p, 'Gruenflaechenbewertung')
 
-DEFAULT_OTP_JAR = os.path.join(base_path, 'lib', 'otp-ggr-stable.jar')
-DEFAULT_JYTHON_PATH = os.path.join(base_path, 'lib', 'jython-standalone-2.7.0.jar')
-DEFAULT_GRAPH_PATH = os.path.join(APPDATA_PATH, 'otp_graphs')
 JAVA_DEFAULT = ''
-LATITUDE_COLUMN = 'Y' # field-name used for storing lat values in csv files
-LONGITUDE_COLUMN = 'X' # field-name used for storing lon values in csv files
-ID_COLUMN = 'id' # field-name used for storing the ids in csv files
-VM_MEMORY_RESERVED = 3 # max. memory the virtual machine running OTP can allocate
-DATETIME_FORMAT = "%d/%m/%Y-%H:%M:%S" # format of time stored in xml files
 
-OUTPUT_DATE_FORMAT = 'dd.MM.yyyy HH:mm:ss' # format of the time in the results
-CALC_REACHABILITY_MODE = "THRESHOLD_SUM_AGGREGATOR" # agg. mode that is used to calculate number of reachable destinations (note: threshold is taken from set max travel time)
-INFINITE = 2147483647 # represents indefinite values in the UI, pyqt spin boxes are limited to max int32
+DEFAULT_OTP_JAR = os.path.join(BASE_PATH, 'lib', 'otp-ggr-stable.jar')
+DEFAULT_JYTHON_PATH = os.path.join(BASE_PATH, 'lib',
+                                   'jython-standalone-2.7.0.jar')
+DEFAULT_GRAPH_PATH = os.path.join(APPDATA_PATH, 'otp_graphs')
 
 DEFAULT_SETTINGS = {
     'active_project': u'',
     'project_path': os.path.join(APPDATA_PATH, 'Projekte'),
+    'graph_path': os.path.join(APPDATA_PATH, 'Router'),
     'system': {
         'otp_jar_file': DEFAULT_OTP_JAR,
         'reserved': 2,
-        'n_threads': 1,
+        'n_threads': 2,
         'jython_jar_file': DEFAULT_JYTHON_PATH,
         'java': JAVA_DEFAULT,
     }
@@ -77,22 +71,27 @@ DEFAULT_SETTINGS = {
 
 
 class Settings(metaclass=Singleton):
+    BASE_PATH = BASE_PATH
+    UI_PATH = os.path.join(BASE_PATH, 'ui')
+    LATITUDE_COLUMN = 'Y' # field-name used for storing lat values in csv files
+    LONGITUDE_COLUMN = 'X' # field-name used for storing lon values in csv files
+    ID_COLUMN = 'id' # field-name used for storing the ids in csv files
+    VM_MEMORY_RESERVED = 3 # max. memory the virtual machine running OTP can allocate
+    DATETIME_FORMAT = "%d/%m/%Y-%H:%M:%S" # format of time stored in xml files
+
+    OUTPUT_DATE_FORMAT = 'dd.MM.yyyy HH:mm:ss' # format of the time in the results
+    CALC_REACHABILITY_MODE = "THRESHOLD_SUM_AGGREGATOR" # agg. mode that is used to calculate number of reachable destinations (note: threshold is taken from set max travel time)
+    INFINITE = 2147483647 # represents indefinite values in the UI, pyqt spin boxes are limited to max int32
+
     '''
     singleton for accessing and storing global settings in files
-
-    Attributes
-    ----------
-    active_project : str
-        the name of the active project
-    project_path : str
-        path to project folders
     '''
     _settings = {}
     # write changed config instantly to file
     _write_instantly = True
 
     def __init__(self, filename: str = 'config.txt',
-                 default: dict = DEFAULT_SETTINGS):
+                 defaults: dict = DEFAULT_SETTINGS):
         '''
         Parameters
         ----------
@@ -100,6 +99,7 @@ class Settings(metaclass=Singleton):
             name of file in APPDATA path to store settings in
             by default 'projektcheck-config.txt'
         '''
+        self.defaults = defaults
         if not os.path.exists(APPDATA_PATH):
             os.mkdir(APPDATA_PATH)
 
@@ -110,7 +110,7 @@ class Settings(metaclass=Singleton):
             self.read()
             # add missing Parameters
             changed = False
-            for k, v in default.items():
+            for k, v in defaults.items():
                 if k not in self._settings:
                     self._settings[k] = v
                     changed = True
@@ -119,7 +119,7 @@ class Settings(metaclass=Singleton):
 
         # write default config, if file doesn't exist yet
         else:
-            self._settings = default.copy()
+            self._settings = defaults.copy()
             self.write()
 
     def read(self, config_file: str = None):
@@ -163,6 +163,9 @@ class Settings(metaclass=Singleton):
             config_copy = self._settings.copy()
             # pretty print to file
             json.dump(config_copy, f, indent=4, separators=(',', ': '))
+
+    def reset_to_defaults(self):
+        self._settings = self.defaults.copy()
 
     # access stored config entries like fields
     def __getattr__(self, name: str):
@@ -293,19 +296,8 @@ class ProjectManager(metaclass=Singleton):
     '''
     _projects = {}
     settings = settings
-    _required_settings = ['BASEDATA_URL', 'GEOSERVER_URL', 'EPSG']
 
     def __init__(self):
-        # check settings
-        missing = []
-        for required in self._required_settings:
-            if required not in self.settings:
-                missing.append(required)
-        if missing:
-            raise Exception(f'{missing} have to be set')
-        self.basedata = None
-        self.basedata_version = None
-        self._server_versions = None
         self.load()
 
     def load(self):
@@ -322,169 +314,6 @@ class ProjectManager(metaclass=Singleton):
             if not os.path.exists(project_path):
                 self.settings.project_path = project_path = ''
         self.reset_projects()
-
-    def check_basedata(self, path: str = None) -> Tuple[int, str]:
-        '''
-        validate the local base data
-
-        Parameters
-        ----------
-        path : str, optional
-            base data path to check, defaults to the currently set path
-
-        Returns
-        ----------
-        (int, str)
-            status code and validation message
-            codes:
-            -1 - connection error
-             0 - no local data
-             1 - local data outdated
-             2 - local data up to date
-        '''
-        # ToDo: check if all files are there
-        if not self.server_versions:
-            return -1, ('Der Server mit den Basisdaten ist nicht verfügbar.\n\n'
-                        'Möglicherweise hat sich die URL des Servers geändert. '
-                        'Bitte prüfen Sie, ob eine neue Projekt-Check-Version '
-                        'im QGIS-Pluginmanager verfügbar ist.'
-        #'Ist dies nicht der Fall, wenden Sie sich bitte an das ILS (oder so)'
-                        )
-        newest_server_v = self.server_versions[0]
-        local_versions = self.local_versions(
-            path or self.settings.basedata_path)
-        if not local_versions:
-            return 0, 'Es wurden keine lokalen Basisdaten gefunden'
-        newest_local_v = local_versions[0]
-        if newest_server_v['version'] > newest_local_v['version']:
-            return 1, (f'Neue Basisdaten (v{newest_server_v["version"]} '
-                       f'{newest_server_v["date"]}) '
-                       f'sind verfügbar (lokal: v{newest_local_v["version"]} '
-                       f'{newest_local_v["date"]})')
-        return 2, ('Die Basisdaten sind auf dem neuesten Stand '
-                   f'(v{newest_local_v["version"]} {newest_local_v["date"]})')
-
-    def add_local_version(self, version_meta: dict, path: str = None):
-        '''
-        register a new local base data version, creates a
-        folder path + version number
-
-        Parameters
-        ----------
-        version_meta : dict
-            metadata of version as dictionary as supplied by server,
-            containing properties:
-            version - number of version
-            date - original date of creation of base data
-            file - file name on server
-        '''
-        path = path or self.settings.basedata_path
-        p = os.path.join(path, str(version_meta['version']))
-        if not os.path.exists(p):
-            os.makedirs(p)
-        fp = os.path.join(p, 'basedata.json')
-        with open(fp, 'w') as f:
-            json.dump(version_meta, f, indent=4, separators=(',', ': '))
-
-    def local_versions(self, path: str) -> List[dict]:
-        '''
-        get metadata of all local base data versions
-
-        Returns
-        -------
-        list
-            metadata of each found base data version as dictionaries,
-            sorted by version number (newest first), containing properties:
-            version - number of version
-            date - original date of creation of base data
-            file - file name on server
-        '''
-        if not os.path.exists(path):
-            return
-        versions = []
-        subfolders = glob(f'{path}/*/')
-        for folder in subfolders:
-            fp = os.path.join(folder, 'basedata.json')
-            if os.path.exists(fp):
-                try:
-                    with open(fp, 'r') as f:
-                        v = json.load(f)
-                    v['path'] = folder
-                    versions.append(v)
-                except:
-                    pass
-        return sorted(versions, key=itemgetter('version'), reverse=True)
-
-    @property
-    def server_versions(self) -> List[dict]:
-        '''
-        request server for available base data version
-
-        Returns
-        -------
-        list
-            metadata of each found base data version as dictionaries,
-            sorted by version number (newest first), containing properties:
-            version - number of version
-            date - original date of creation of base data
-            file - file name on server
-
-        Raises
-        -------
-        ConnectionError
-            can't establish connection to server or metadata file is not
-            available
-        '''
-        if self._server_versions:
-            return self._server_versions
-        try:
-            request = Request(synchronous=True)
-            # metadata url
-            res = request.get(f'{settings.BASEDATA_URL}/v_basedata.json')
-        except ConnectionError:
-            return
-        if res.status_code != 200:
-            return
-        self._server_versions = sorted(res.json(), key=itemgetter('version'),
-                                       reverse=True)
-        return self._server_versions
-
-    def load_basedata(self, version: int = None) -> bool:
-        '''
-        set base data with version number active
-
-        Parameters
-        ----------
-        version : int, optional
-            number of version to load, defaults to newest available version
-            (by number)
-
-        Returns
-        ----------
-        bool
-            whether loading was successful or not
-        '''
-        if version is not None and version == self.basedata_version:
-            return True
-        self.basedata = None
-        base_path = self.settings.basedata_path
-        local_versions = self.local_versions(base_path)
-        if not local_versions:
-            return False
-        if not version:
-            # take newest version available locally
-            local_version = local_versions[0]
-        else:
-            lv = [v['version'] for v in local_versions]
-            if version not in lv:
-                return False
-            local_version = local_versions[lv.index(version)]
-        path = local_version['path']
-        if not os.path.exists(path):
-            return False
-        self.basedata = Geopackage(base_path=path, read_only=True)
-        self.basedata_version = local_version['version']
-        return True
 
     def create_project(self, name: str, create_folder: bool = True):
         '''
