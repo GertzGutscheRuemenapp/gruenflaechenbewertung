@@ -12,7 +12,8 @@ from sys import platform
 
 from gruenflaechenotp.tool.base.project import (ProjectManager, settings)
 from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, RouterDialog, InfoDialog,
-                                           SettingsDialog, NewProjectDialog)
+                                           SettingsDialog, NewProjectDialog,
+                                           ImportLayerDialog)
 from gruenflaechenotp.tool.base.database import Workspace
 from gruenflaechenotp.tool.tables import ProjectSettings
 import tempfile
@@ -92,6 +93,13 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.max_slope_edit.valueChanged.connect(
             lambda x: save_project_setting('max_slope', x))
 
+        self.ui.create_router_button.clicked.connect(self.create_router)
+
+        self.ui.import_project_area_button.clicked.connect(self.import_layer)
+        self.ui.import_building_blocks_button.clicked.connect(self.import_layer)
+        self.ui.import_building_exits_button.clicked.connect(self.import_layer)
+        self.ui.import_green_spaces_button.clicked.connect(self.import_layer)
+        self.ui.import_green_exits_button.clicked.connect(self.import_layer)
 
         # router
         #self.fill_router_combo()
@@ -135,6 +143,10 @@ class OTPMainWindow(QtCore.QObject):
             self.ui.project_combo.addItem(project.name, project)
             self.ui.project_combo.setCurrentIndex(
                 self.ui.project_combo.count() - 1)
+
+    def import_layer(self):
+        dialog = ImportLayerDialog()
+        dialog.show()
 
     def clone_project(self):
         '''
@@ -224,12 +236,14 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.wheelchair_check.setChecked(self.project_settings.wheelchair)
         self.ui.max_slope_edit.setValue(self.project_settings.max_slope)
 
-    def fill_router_combo(self):
+        self.setup_routers()
+
+    def setup_routers(self):
         # try to keep old router selected
-        saved_router = config.settings['router_config']['router']
+        saved_router = self.project_settings.router
         self.ui.router_combo.clear()
         idx = 0
-        graph_path = self.ui.graph_path_edit.text()
+        graph_path = settings.graph_path
         if not os.path.exists(graph_path):
             self.ui.router_combo.addItem(
                 'Verzeichnis mit Routern nicht gefunden')
@@ -248,7 +262,6 @@ class OTPMainWindow(QtCore.QObject):
             self.ui.router_combo.setEnabled(True)
             self.ui.create_router_button.setEnabled(True)
         self.ui.router_combo.setCurrentIndex(idx)
-
 
     def start_origin_destination(self):
         if not self.ui.router_combo.isEnabled():
@@ -498,27 +511,26 @@ class OTPMainWindow(QtCore.QObject):
             origin_layer.addJoin(join)
 
     def create_router(self):
-        java_executable = self.ui.java_edit.text()
-        otp_jar=self.ui.otp_jar_edit.text()
+        java_executable = settings.system['java']
+        otp_jar = settings.system['otp_jar_file']
         if not os.path.exists(otp_jar):
-            msg_box = QMessageBox(
-                QMessageBox.Warning, "Fehler",
-                u'Die angegebene OTP JAR Datei existiert nicht!')
+            msg_box = QtWidgets.QMessageBox(
+                QtWidgets.QMessageBox.Warning, "Fehler",
+                'Die angegebene OTP JAR Datei existiert nicht!')
             msg_box.exec_()
             return
         if not os.path.exists(java_executable):
-            msg_box = QMessageBox(
-                QMessageBox.Warning, "Fehler",
-                u'Der angegebene Java-Pfad existiert nicht!')
+            msg_box = QtWidgets.QMessageBox(
+                QtWidgets.QMessageBox.Warning, "Fehler",
+                'Der angegebene Java-Pfad existiert nicht!')
             msg_box.exec_()
             return
-        graph_path = self.ui.graph_path_edit.text()
-        memory = self.ui.memory_edit.value()
+        graph_path = settings.graph_path
+        memory = settings.system['reserved']
         diag = RouterDialog(graph_path, java_executable, otp_jar,
-                            memory=memory,
-                            parent=self.ui)
+                            memory=memory, parent=self.ui)
         diag.exec_()
-        self.fill_router_combo()
+        self.setup_routers()
 
     def show_info(self):
         diag = InfoDialog(parent=self.ui)
@@ -526,7 +538,9 @@ class OTPMainWindow(QtCore.QObject):
 
     def show_settings(self):
         diag = SettingsDialog(parent=self.ui)
-        diag.exec_()
+        ok = diag.show()
+        if ok:
+            self.setup_projects()
 
     def open_manual(self):
         webbrowser.open_new(MANUAL_URL)

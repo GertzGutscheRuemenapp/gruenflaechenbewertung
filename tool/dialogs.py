@@ -2,19 +2,23 @@
 from builtins import str
 import os
 from PyQt5 import uic, QtCore, QtGui, QtWidgets
+from qgis.gui import QgsMapLayerComboBox
+from qgis.core import QgsMapLayerProxyModel
 import copy, os, re, sys, datetime
 from sys import platform
 from shutil import move
 import re
+
+# Initialize Qt resources from file resources.py
+from gruenflaechenotp import resources
+from gruenflaechenotp.tool.base.project import settings, ProjectManager
+from gruenflaechenotp.tool.tables import ProjectArea
 
 XML_FILTER = u'XML-Dateien (*.xml)'
 CSV_FILTER = u'Comma-seperated values (*.csv)'
 JAR_FILTER = u'Java Archive (*.jar)'
 ALL_FILE_FILTER = u'Java Executable (java.*)'
 
-# Initialize Qt resources from file resources.py
-from gruenflaechenotp import resources
-from gruenflaechenotp.tool.base.project import settings, ProjectManager
 
 INFO_FORM_CLASS, _ = uic.loadUiType(os.path.join(
     settings.BASE_PATH, 'ui', 'info.ui'))
@@ -222,6 +226,42 @@ class NewProjectDialog(Dialog):
         if confirmed:
             return confirmed, self.name_edit.text()
         return False, None
+
+
+class ImportLayerDialog(Dialog):
+
+    def setupUi(self):
+        '''
+        set up the user interface
+        '''
+        self.setMinimumWidth(500)
+        self.setWindowTitle('Neues Projekt erstellen')
+
+        layout = QtWidgets.QVBoxLayout(self)
+        label = QtWidgets.QLabel('Zu importierender Layer')
+        self.input_layer_combo = QgsMapLayerComboBox()
+        self.input_layer_combo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+        layout.addWidget(self.input_layer_combo)
+        layout.addWidget(label)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel,
+            QtCore.Qt.Horizontal, self)
+        self.ok_button = buttons.button(QtWidgets.QDialogButtonBox.Ok)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+
+    def accept(self):
+        target_table = ProjectArea.get_table(create=True)
+        target_table.delete_rows()
+        layer = self.input_layer_combo.currentLayer()
+        # ToDo: transform
+        if not layer or not layer.isValid():
+            return
+        for feature in layer.getFeatures():
+            target_table.add(geom=feature.geometry())
 
 
 class ProgressDialog(QtWidgets.QDialog, PROGRESS_FORM_CLASS):
@@ -639,6 +679,14 @@ class SettingsDialog(Dialog):
             return
         edit.setText(path)
 
+    def show(self):
+        '''
+        show dialog and return selections made by user
+        '''
+        confirmed = self.exec_()
+        if confirmed:
+            return confirmed
+        return False
 
 def browse_file(file_preset, title, file_filter, save=True, parent=None):
 

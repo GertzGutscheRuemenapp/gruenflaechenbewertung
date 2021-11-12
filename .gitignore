@@ -2,6 +2,7 @@
 *.wpu
 *.pyc
 *.class
+/lib
 /config.xml
 /otp_config.xml
 *.*~

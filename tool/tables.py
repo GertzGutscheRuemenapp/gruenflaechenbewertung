@@ -13,3 +13,9 @@ class ProjectSettings(ProjectTable):
 
     class Meta:
         workspace = 'project'
+
+
+class ProjectArea(ProjectTable):
+
+    class Meta:
+        workspace = 'project'
