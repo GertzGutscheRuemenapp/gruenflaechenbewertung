@@ -2,23 +2,19 @@ from builtins import str
 from builtins import range
 from builtins import object
 import os
-from PyQt5 import uic
-from PyQt5.QtCore import (QSettings, QTranslator, qVersion,
-                          QCoreApplication, QProcess, QDateTime,
-                          QVariant, QLocale, QDate, QObject)
-from PyQt5.QtWidgets import (QAction, QListWidgetItem, QCheckBox,
-                             QMessageBox, QLabel, QDoubleSpinBox, QMainWindow,
-                             QFileDialog, QInputDialog, QLineEdit)
-from PyQt5.QtGui import QIcon
+from PyQt5 import uic,  QtCore, QtWidgets
+
+from qgis import utils
+from qgis._core import (QgsVectorLayer, QgsVectorLayerJoinInfo,
+                        QgsCoordinateReferenceSystem, QgsField)
+from qgis.core import QgsVectorFileWriter, QgsProject
 from sys import platform
 
 from gruenflaechenotp.tool.base.project import (ProjectManager, settings)
 from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, RouterDialog, InfoDialog,
                                            SettingsDialog, NewProjectDialog)
 from gruenflaechenotp.tool.base.database import Workspace
-from qgis._core import (QgsVectorLayer, QgsVectorLayerJoinInfo,
-                        QgsCoordinateReferenceSystem, QgsField)
-from qgis.core import QgsVectorFileWriter, QgsProject
+from gruenflaechenotp.tool.tables import ProjectSettings
 import tempfile
 import shutil
 import getpass
@@ -34,15 +30,17 @@ PRINT_EVERY_N_LINES = 100
 main_form = os.path.join(settings.UI_PATH, 'OTP_main_window.ui')
 
 
-class OTPMainWindow(QObject):
+class OTPMainWindow(QtCore.QObject):
     def __init__(self, on_close=None, parent=None):
         """Constructor."""
         super().__init__(parent)
 
-        self.ui = QMainWindow()
+        self.ui = QtWidgets.QMainWindow()
         uic.loadUi(main_form, self.ui)
         self.project_manager = ProjectManager()
+        self.project_settings = None
         graph_path = self.project_manager.settings.graph_path
+        self.canvas = utils.iface.mapCanvas()
         if graph_path and not os.path.exists(graph_path):
             try:
                 os.makedirs(graph_path)
@@ -73,6 +71,27 @@ class OTPMainWindow(QObject):
 
         # connect menu actions
         self.ui.settings_action.triggered.connect(self.show_settings)
+
+        def save_project_setting(attr, value):
+            self.project_settings[attr] = value
+            self.project_settings.save()
+
+        self.ui.required_green_edit.valueChanged.connect(
+            lambda x: save_project_setting('required_green', x))
+        self.ui.max_walk_dist_edit.valueChanged.connect(
+            lambda x: save_project_setting('max_walk_dist', x))
+        self.ui.project_buffer_edit.valueChanged.connect(
+            lambda x: save_project_setting('project_buffer', x))
+
+        ##self.router_combo.setValue(project_settings.router)
+        self.ui.walk_speed_edit.valueChanged.connect(
+            lambda x: save_project_setting('walk_speed', x))
+        self.ui.wheelchair_check.stateChanged.connect(
+            lambda: save_project_setting('wheelchair',
+                                         self.ui.wheelchair_check.isChecked()))
+        self.ui.max_slope_edit.valueChanged.connect(
+            lambda x: save_project_setting('max_slope', x))
+
 
         # router
         #self.fill_router_combo()
@@ -109,6 +128,9 @@ class OTPMainWindow(QObject):
 
         if ok:
             project = self.project_manager.create_project(project_name)
+            project_settings = ProjectSettings.features(project=project,
+                                                        create=True)
+            project_settings.add()
             self.project_manager.active_project = project
             self.ui.project_combo.addItem(project.name, project)
             self.ui.project_combo.setCurrentIndex(
@@ -144,15 +166,13 @@ class OTPMainWindow(QObject):
         project = self.project_manager.active_project
         if not project:
             return
-        reply = QMessageBox.question(
+        reply = QtWidgets.QMessageBox.question(
             self.ui, 'Projekt entfernen',
             f'Soll das Projekt "{project.name}" entfernt werden?\n'
             '(alle Projektdaten werden gelöscht)',
-             QMessageBox.Yes, QMessageBox.No)
-        if reply == QMessageBox.Yes:
+             QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
+        if reply == QtWidgets.QMessageBox.Yes:
             idx = self.ui.project_combo.currentIndex()
-            if self.active_dockwidget:
-                self.active_dockwidget.close()
             self.ui.project_combo.setCurrentIndex(0)
             self.ui.project_combo.removeItem(idx)
             instances = list(Workspace.get_instances())
@@ -178,13 +198,31 @@ class OTPMainWindow(QObject):
                 self.project_manager.active_project = None
                 self.canvas.mapCanvasRefreshed.disconnect(on_refresh)
             self.canvas.mapCanvasRefreshed.connect(on_refresh)
+            self.canvas.mapCanvasRefreshed
             self.canvas.refreshAllLayers()
 
     def change_project(self, project):
+        if not project:
+            self.ui.tabWidget.setEnabled(False)
+            return
         self.project_manager.active_project = project
-        self.ui.tabWidget.setEnabled(True)
+        self.project_settings = ProjectSettings.features(project=project)[0]
         # ToDo: load layers and settings
-        pass
+        try:
+            self.apply_project_settings(project)
+        except FileNotFoundError:
+            return
+        self.ui.tabWidget.setEnabled(True)
+
+    def apply_project_settings(self, project):
+        self.ui.required_green_edit.setValue(self.project_settings.required_green)
+        self.ui.max_walk_dist_edit.setValue(self.project_settings.max_walk_dist)
+        self.ui.project_buffer_edit.setValue(self.project_settings.project_buffer)
+
+        #self.router_combo.setValue(project_settings.router)
+        self.ui.walk_speed_edit.setValue(self.project_settings.walk_speed)
+        self.ui.wheelchair_check.setChecked(self.project_settings.wheelchair)
+        self.ui.max_slope_edit.setValue(self.project_settings.max_slope)
 
     def fill_router_combo(self):
         # try to keep old router selected
@@ -210,6 +248,7 @@ class OTPMainWindow(QObject):
             self.ui.router_combo.setEnabled(True)
             self.ui.create_router_button.setEnabled(True)
         self.ui.router_combo.setCurrentIndex(idx)
+
 
     def start_origin_destination(self):
         if not self.ui.router_combo.isEnabled():

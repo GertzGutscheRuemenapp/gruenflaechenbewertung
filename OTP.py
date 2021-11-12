@@ -11,7 +11,7 @@ CSV_FILTER = u'Comma-seperated values (*.csv)'
 JAR_FILTER = u'Java Archive (*.jar)'
 ALL_FILE_FILTER = u'Java Executable (java.*)'
 
-PLUGIN_TITLE = 'Grünflächenbewertung OTP'
+PLUGIN_TITLE = 'Grünflächenbewertung'
 
 
 class OTP(object):
@@ -43,7 +43,7 @@ class OTP(object):
                               self.iface.mainWindow())
         self.action.triggered.connect(lambda: self.run())
         self.toolbar.addAction(self.action)
-        self.iface.addPluginToMenu('Grünflächenbewertung', self.action)
+        self.iface.addPluginToMenu(PLUGIN_TITLE, self.action)
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""

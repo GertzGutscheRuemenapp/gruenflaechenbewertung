@@ -83,6 +83,8 @@ class Settings(metaclass=Singleton):
     CALC_REACHABILITY_MODE = "THRESHOLD_SUM_AGGREGATOR" # agg. mode that is used to calculate number of reachable destinations (note: threshold is taken from set max travel time)
     INFINITE = 2147483647 # represents indefinite values in the UI, pyqt spin boxes are limited to max int32
 
+    EPSG = 25382
+
     '''
     singleton for accessing and storing global settings in files
     '''
@@ -464,7 +466,6 @@ class ProjectTable:
             table = cls._create(table_name, workspace,
                                 geometry_type=geometry_type)
         return table
-
     @staticmethod
     def _where(kwargs):
         pass
