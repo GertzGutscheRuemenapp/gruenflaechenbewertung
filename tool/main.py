@@ -7,14 +7,14 @@ from qgis._core import (QgsVectorLayer, QgsVectorLayerJoinInfo,
 from qgis.core import QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel
 
 from gruenflaechenotp.tool.base.project import (ProjectManager, settings,
-                                                ProjectLayer, OSMBackgroundLayer,
-                                                TerrestrisBackgroundLayer)
+                                                ProjectLayer, OSMBackgroundLayer)
 from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, RouterDialog, InfoDialog,
                                            SettingsDialog, NewProjectDialog,
                                            ImportLayerDialog)
 from gruenflaechenotp.tool.base.database import Workspace
-from gruenflaechenotp.tool.tables import (ProjectSettings, ProjectArea,
-                                          Addresses)
+from gruenflaechenotp.tool.tables import (ProjectSettings, Projektgebiet,
+                                          Adressen, Baubloecke, Gruenflaechen,
+                                          GruenflaechenEingaenge)
 import tempfile
 import shutil
 import getpass
@@ -147,25 +147,55 @@ class OTPMainWindow(QtCore.QObject):
                 self.ui.project_combo.count() - 1)
 
     def import_project_area(self):
-        table = ProjectArea.get_table(create=True)
+        table = Projektgebiet.get_table(create=True)
         dialog = ImportLayerDialog(
             table, title='Projektgebiet importieren',
             filter_class=QgsMapLayerProxyModel.PolygonLayer)
         ok = dialog.show()
+        if ok:
+            self.pa_output.draw(redraw=False)
+
+    def import_green_spaces(self):
+        table = Gruenflaechen.get_table(create=True)
+        dialog = ImportLayerDialog(
+            table, title='Grünflächen importieren',
+            filter_class=QgsMapLayerProxyModel.PolygonLayer)
+        ok = dialog.show()
+        if ok:
+            self.green_output.draw(redraw=False)
+
+    def import_blocks(self):
+        table = Baubloecke.get_table(create=True)
+        dialog = ImportLayerDialog(
+            table, title='Baublöcke importieren',
+            #ToDo: einwohner required
+            filter_class=QgsMapLayerProxyModel.PolygonLayer)
+        ok = dialog.show()
+        if ok:
+            self.blocks_output.draw(redraw=False)
 
     def import_addresses(self):
-        table = Addresses.get_table(create=True)
+        table = Adressen.get_table(create=True)
         dialog = ImportLayerDialog(
             table, title='Adressen importieren',
-            optional_fields=[('street', 'Straße'), ('number', 'Hausnummer'),
-                             ('city', 'Ort'), ('description', 'Beschreibung')],
+            optional_fields=[('strasse', 'Straße'), ('hausnummer', 'Hausnummer'),
+                             ('ort', 'Ort'), ('beschreibung', 'Beschreibung')],
             help_text='Die Angabe der Felder ist optional und dient nur der '
             'besseren manuellen Zuordenbarkeit. Die Felder haben weder Einfluss '
             'auf die Ergebnisse noch auf die Ergebnisdarstellung.',
             filter_class=QgsMapLayerProxyModel.PointLayer)
         ok = dialog.show()
         if ok:
-            self.addr_output.draw(label='Adressen', redraw=False)
+            self.addr_output.draw(redraw=False)
+
+    def import_green_entrances(self):
+        table = GruenflaechenEingaenge.get_table(create=True)
+        dialog = ImportLayerDialog(
+            table, title='Grünflächeneingänge importieren',
+            filter_class=QgsMapLayerProxyModel.PolygonLayer)
+        ok = dialog.show()
+        if ok:
+            self.green_e_output.draw(redraw=False)
 
     def clone_project(self):
         '''
@@ -263,14 +293,32 @@ class OTPMainWindow(QtCore.QObject):
         backgroundOSM.draw()
 
     def add_input_layers(self):
-        project_area = ProjectArea.get_table(create=True)
+        groupname = 'Eingangsdaten'
+        project_area = Projektgebiet.get_table(create=True)
         self.pa_output = ProjectLayer.from_table(
-            project_area, groupname='Eingangsdaten')
+            project_area, groupname=groupname)
         self.pa_output.draw(label='Projektgebiet', redraw=False)
-        addresses = Addresses.get_table(create=True)
+
+        addresses = Adressen.get_table(create=True)
         self.addr_output = ProjectLayer.from_table(
-            addresses, groupname='Eingangsdaten')
+            addresses, groupname=groupname)
         self.addr_output.draw(label='Adressen', redraw=False)
+
+        green_entrances = GruenflaechenEingaenge.get_table(create=True)
+        self.green_e_output = ProjectLayer.from_table(
+            green_entrances, groupname=groupname)
+        self.green_e_output.draw(label='Grünflächen Eingänge', redraw=False)
+
+        green = Gruenflaechen.get_table(create=True)
+        self.green_output = ProjectLayer.from_table(
+            green, groupname=groupname)
+        self.green_output.draw(label='Grünflächen', redraw=False)
+
+        blocks = Baubloecke.get_table(create=True)
+        self.blocks_output = ProjectLayer.from_table(
+            blocks, groupname=groupname)
+        self.blocks_output.draw(label='Baublöcke', redraw=False)
+
 
     def apply_project_settings(self, project):
         self.ui.required_green_edit.setValue(self.project_settings.required_green)

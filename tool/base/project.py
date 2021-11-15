@@ -560,6 +560,7 @@ class ProjectLayer(Layer):
             nested), append if False, defaults to prepending the group
         '''
         self.project = project or ProjectManager().active_project
+        self.label = ''
         groupname = f'{self.project.groupname}/{groupname}' if groupname \
             else self.project.groupname
         super().__init__(layername, data_path, prepend=prepend,

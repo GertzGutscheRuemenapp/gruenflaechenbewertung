@@ -15,18 +15,40 @@ class ProjectSettings(ProjectTable):
         workspace = 'project'
 
 
-class ProjectArea(ProjectTable):
+class Projektgebiet(ProjectTable):
 
     class Meta:
         workspace = 'project'
         geom = 'Polygon'
 
 
-class Addresses(ProjectTable):
-    street = Field(str, '')
-    number = Field(str, '')
-    city = Field(str, '')
-    description = Field(str, '')
+class Adressen(ProjectTable):
+    strasse = Field(str, '')
+    hausnummer = Field(str, '')
+    ort = Field(str, '')
+    beschreibung = Field(str, '')
+
+    class Meta:
+        workspace = 'project'
+        geom = 'Point'
+
+
+class Baubloecke(ProjectTable):
+    einwohner = Field(int, 0)
+
+    class Meta:
+        workspace = 'project'
+        geom = 'Polygon'
+
+
+class Gruenflaechen(ProjectTable):
+
+    class Meta:
+        workspace = 'project'
+        geom = 'Polygon'
+
+
+class GruenflaechenEingaenge(ProjectTable):
 
     class Meta:
         workspace = 'project'

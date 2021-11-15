@@ -3,6 +3,9 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
 from gruenflaechenotp.tool.main import OTPMainWindow
 
+# Initialize Qt resources from file resources.py
+from gruenflaechenotp import resources
+
 # how many results are written while running batch script
 PRINT_EVERY_N_LINES = 100
 

@@ -11,10 +11,7 @@ from sys import platform
 from shutil import move
 import re
 
-# Initialize Qt resources from file resources.py
-from gruenflaechenotp import resources
 from gruenflaechenotp.tool.base.project import settings, ProjectManager
-from gruenflaechenotp.tool.tables import ProjectArea
 
 XML_FILTER = u'XML-Dateien (*.xml)'
 CSV_FILTER = u'Comma-seperated values (*.csv)'
