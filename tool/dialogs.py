@@ -230,20 +230,57 @@ class NewProjectDialog(Dialog):
 
 class ImportLayerDialog(Dialog):
 
+    def __init__(self, table, title='Layer importieren',
+                 filter_class=QgsMapLayerProxyModel.VectorLayer,
+                 help_text='',
+                 optional_fields=[], **kwargs):
+        self.table = table
+        self.title = title
+        self.filter_class = filter_class
+        self.optional_fields = optional_fields
+        self.help_text = help_text
+        super().__init__(**kwargs)
+
     def setupUi(self):
         '''
         set up the user interface
         '''
         self.setMinimumWidth(500)
-        self.setWindowTitle('Neues Projekt erstellen')
+        self.setMaximumWidth(500)
+        self.setWindowTitle(self.title)
 
         layout = QtWidgets.QVBoxLayout(self)
         label = QtWidgets.QLabel('Zu importierender Layer')
         self.input_layer_combo = QgsMapLayerComboBox()
-        self.input_layer_combo.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-        layout.addWidget(self.input_layer_combo)
+        self.input_layer_combo.setFilters(self.filter_class)
         layout.addWidget(label)
+        layout.addWidget(self.input_layer_combo)
 
+        if self.optional_fields:
+            spacer = QtWidgets.QSpacerItem(
+                0, 20, QtWidgets.QSizePolicy.Fixed)
+            layout.addItem(spacer)
+
+        self._optional_inputs = []
+        for field_name, field_label in self.optional_fields:
+            label = QtWidgets.QLabel(f'{field_label} (optional)')
+            o_input = QtWidgets.QComboBox()
+            self._optional_inputs.append(o_input)
+            layout.addWidget(label)
+            layout.addWidget(o_input)
+
+        if self.help_text:
+            spacer = QtWidgets.QSpacerItem(
+                0, 10, QtWidgets.QSizePolicy.Fixed)
+            label = QtWidgets.QLabel(self.help_text)
+            label.setWordWrap(True)
+            layout.addItem(spacer)
+            layout.addWidget(label)
+
+
+        spacer = QSpacerItem(
+            0, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        layout.addItem(spacer)
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel,
             QtCore.Qt.Horizontal, self)
@@ -254,14 +291,13 @@ class ImportLayerDialog(Dialog):
 
 
     def accept(self):
-        target_table = ProjectArea.get_table(create=True)
-        target_table.delete_rows()
         layer = self.input_layer_combo.currentLayer()
         # ToDo: transform
         if not layer or not layer.isValid():
             return
+        self.table.delete_rows()
         for feature in layer.getFeatures():
-            target_table.add(geom=feature.geometry())
+            self.table.add(geom=feature.geometry())
 
 
 class ProgressDialog(QtWidgets.QDialog, PROGRESS_FORM_CLASS):
@@ -678,15 +714,6 @@ class SettingsDialog(Dialog):
         if not path:
             return
         edit.setText(path)
-
-    def show(self):
-        '''
-        show dialog and return selections made by user
-        '''
-        confirmed = self.exec_()
-        if confirmed:
-            return confirmed
-        return False
 
 def browse_file(file_preset, title, file_filter, save=True, parent=None):
 

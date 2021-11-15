@@ -19,3 +19,13 @@ class ProjectArea(ProjectTable):
 
     class Meta:
         workspace = 'project'
+
+
+class Addresses(ProjectTable):
+    street = Field(str, '')
+    number = Field(str, '')
+    city = Field(str, '')
+    description = Field(str, '')
+
+    class Meta:
+        workspace = 'project'

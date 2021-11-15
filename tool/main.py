@@ -1,21 +1,20 @@
-from builtins import str
-from builtins import range
-from builtins import object
 import os
 from PyQt5 import uic,  QtCore, QtWidgets
 
 from qgis import utils
 from qgis._core import (QgsVectorLayer, QgsVectorLayerJoinInfo,
-                        QgsCoordinateReferenceSystem, QgsField)
-from qgis.core import QgsVectorFileWriter, QgsProject
-from sys import platform
+                        QgsCoordinateReferenceSystem)
+from qgis.core import QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel
 
-from gruenflaechenotp.tool.base.project import (ProjectManager, settings)
+from gruenflaechenotp.tool.base.project import (ProjectManager, settings,
+                                                ProjectLayer, OSMBackgroundLayer,
+                                                TerrestrisBackgroundLayer)
 from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, RouterDialog, InfoDialog,
                                            SettingsDialog, NewProjectDialog,
                                            ImportLayerDialog)
 from gruenflaechenotp.tool.base.database import Workspace
-from gruenflaechenotp.tool.tables import ProjectSettings
+from gruenflaechenotp.tool.tables import (ProjectSettings, ProjectArea,
+                                          Addresses)
 import tempfile
 import shutil
 import getpass
@@ -95,11 +94,14 @@ class OTPMainWindow(QtCore.QObject):
 
         self.ui.create_router_button.clicked.connect(self.create_router)
 
-        self.ui.import_project_area_button.clicked.connect(self.import_layer)
-        self.ui.import_building_blocks_button.clicked.connect(self.import_layer)
-        self.ui.import_building_exits_button.clicked.connect(self.import_layer)
-        self.ui.import_green_spaces_button.clicked.connect(self.import_layer)
-        self.ui.import_green_exits_button.clicked.connect(self.import_layer)
+        self.ui.import_project_area_button.clicked.connect(
+            self.import_project_area)
+        #self.ui.import_building_blocks_button.clicked.connect(
+            #self.import_building_exits_layer)
+        self.ui.import_addresses_button.clicked.connect(
+            self.import_addresses)
+        #self.ui.import_green_spaces_button.clicked.connect(self.import_layer)
+        #self.ui.import_green_exits_button.clicked.connect(self.import_layer)
 
         # router
         #self.fill_router_combo()
@@ -144,9 +146,26 @@ class OTPMainWindow(QtCore.QObject):
             self.ui.project_combo.setCurrentIndex(
                 self.ui.project_combo.count() - 1)
 
-    def import_layer(self):
-        dialog = ImportLayerDialog()
-        dialog.show()
+    def import_project_area(self):
+        table = ProjectArea.get_table(create=True)
+        dialog = ImportLayerDialog(
+            table, title='Projektgebiet importieren',
+            filter_class=QgsMapLayerProxyModel.PolygonLayer)
+        ok = dialog.show()
+
+    def import_addresses(self):
+        table = Addresses.get_table(create=True)
+        dialog = ImportLayerDialog(
+            table, title='Adressen importieren',
+            optional_fields=[('street', 'Straße'), ('number', 'Hausnummer'),
+                             ('city', 'Ort'), ('Beschreibung', 'description')],
+            help_text='Die Angabe der Felder ist optional und dient nur der '
+            'besseren manuellen Zuordenbarkeit. Die Felder haben weder Einfluss '
+            'auf die Ergebnisse noch auf die Ergebnisdarstellung.',
+            filter_class=QgsMapLayerProxyModel.PolygonLayer)
+        ok = dialog.show()
+        if ok:
+            pass
 
     def clone_project(self):
         '''
@@ -225,6 +244,25 @@ class OTPMainWindow(QtCore.QObject):
         except FileNotFoundError:
             return
         self.ui.tabWidget.setEnabled(True)
+
+        # check active project, uncheck other projects
+        layer_root = QgsProject.instance().layerTreeRoot()
+        for p in self.project_manager.projects:
+            group = layer_root.findGroup(p.groupname)
+            if group:
+                group.setItemVisibilityChecked(
+                    p.groupname==project.groupname)
+
+        self.add_input_layers()
+
+        backgroundOSM = OSMBackgroundLayer(groupname='Hintergrundkarten')
+        backgroundOSM.draw()
+
+    def add_input_layers(self):
+        project_area = ProjectArea.get_table(create=True)
+        self.pa_output = ProjectLayer.from_table(
+            project_area, groupname='Eingangsdaten')
+        self.pa_output.draw(label='Projektgebiet', redraw=False)
 
     def apply_project_settings(self, project):
         self.ui.required_green_edit.setValue(self.project_settings.required_green)
