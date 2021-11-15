@@ -2,8 +2,10 @@
 from builtins import str
 import os
 from PyQt5 import uic, QtCore, QtGui, QtWidgets
-from qgis.gui import QgsMapLayerComboBox
-from qgis.core import QgsMapLayerProxyModel
+from qgis.gui import QgsMapLayerComboBox, QgsProjectionSelectionWidget
+from qgis.core import (QgsMapLayerProxyModel, QgsCoordinateTransform,
+                       QgsCoordinateReferenceSystem, QgsProject,
+                       QgsGeometry)
 import copy, os, re, sys, datetime
 from sys import platform
 from shutil import move
@@ -253,12 +255,17 @@ class ImportLayerDialog(Dialog):
         label = QtWidgets.QLabel('Zu importierender Layer')
         self.input_layer_combo = QgsMapLayerComboBox()
         self.input_layer_combo.setFilters(self.filter_class)
+        self.input_layer_combo.layerChanged.connect(self.layer_changed)
         layout.addWidget(label)
         layout.addWidget(self.input_layer_combo)
 
+        label = QtWidgets.QLabel('Ausgangsprojektion des zu importierenden Layers')
+        self.projection_combo = QgsProjectionSelectionWidget()
+        layout.addWidget(label)
+        layout.addWidget(self.projection_combo)
+
         if self.optional_fields:
-            spacer = QtWidgets.QSpacerItem(
-                0, 20, QtWidgets.QSizePolicy.Fixed)
+            spacer = QtWidgets.QSpacerItem(0, 20, QtWidgets.QSizePolicy.Fixed)
             layout.addItem(spacer)
 
         self._optional_inputs = []
@@ -270,16 +277,14 @@ class ImportLayerDialog(Dialog):
             layout.addWidget(o_input)
 
         if self.help_text:
-            spacer = QtWidgets.QSpacerItem(
-                0, 10, QtWidgets.QSizePolicy.Fixed)
+            spacer = QtWidgets.QSpacerItem(0, 10, QtWidgets.QSizePolicy.Fixed)
             label = QtWidgets.QLabel(self.help_text)
             label.setWordWrap(True)
             layout.addItem(spacer)
             layout.addWidget(label)
 
-
-        spacer = QSpacerItem(
-            0, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        spacer = QtWidgets.QSpacerItem(0, 10, QtWidgets.QSizePolicy.Minimum,
+                                       QtWidgets.QSizePolicy.Expanding)
         layout.addItem(spacer)
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel,
@@ -289,15 +294,52 @@ class ImportLayerDialog(Dialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+        self.ok_button.setEnabled(False)
+        self.input_layer_combo.layerChanged.connect(self.validate)
+        self.projection_combo.crsChanged.connect(self.validate)
+        self.layer_changed(self.input_layer_combo.currentLayer())
+
+    def layer_changed(self, layer):
+        if not layer:
+            return
+        field_names = ['-'] + [f.name() for f in layer.fields()]
+        for o_input in self._optional_inputs:
+            o_input.addItems(field_names)
+
+        crs = layer.crs()
+        self.projection_combo.setCrs(crs)
 
     def accept(self):
         layer = self.input_layer_combo.currentLayer()
-        # ToDo: transform
-        if not layer or not layer.isValid():
-            return
+        tr = QgsCoordinateTransform(
+            QgsCoordinateReferenceSystem(self.projection_combo.crs()),
+            QgsCoordinateReferenceSystem(f'epsg:{settings.EPSG}'),
+            QgsProject.instance()
+        )
         self.table.delete_rows()
+        o_fields = [(f_in, f_out ) for f_in, f_out in zip(
+            [i.currentText() for i in self._optional_inputs],
+            [f[0] for f in self.optional_fields]) if f_in != '-']
+
         for feature in layer.getFeatures():
-            self.table.add(geom=feature.geometry())
+            geom = QgsGeometry(feature.geometry())
+            if geom.isGeosValid():
+                geom.transform(tr)
+            else:
+                geom = QgsGeometry()
+            fields = {}
+            for f_in, f_out in o_fields:
+                fields[f_out] = feature.attribute(f_in)
+            self.table.add(geom=geom, **fields)
+
+        self.close()
+
+    def validate(self):
+        layer = self.input_layer_combo.currentLayer()
+        error = (not layer or
+                 not layer.isValid() or
+                 not self.projection_combo.crs().authid())
+        self.ok_button.setEnabled(not error)
 
 
 class ProgressDialog(QtWidgets.QDialog, PROGRESS_FORM_CLASS):

@@ -158,11 +158,11 @@ class OTPMainWindow(QtCore.QObject):
         dialog = ImportLayerDialog(
             table, title='Adressen importieren',
             optional_fields=[('street', 'Straße'), ('number', 'Hausnummer'),
-                             ('city', 'Ort'), ('Beschreibung', 'description')],
+                             ('city', 'Ort'), ('description', 'Beschreibung')],
             help_text='Die Angabe der Felder ist optional und dient nur der '
             'besseren manuellen Zuordenbarkeit. Die Felder haben weder Einfluss '
             'auf die Ergebnisse noch auf die Ergebnisdarstellung.',
-            filter_class=QgsMapLayerProxyModel.PolygonLayer)
+            filter_class=QgsMapLayerProxyModel.PointLayer)
         ok = dialog.show()
         if ok:
             pass
@@ -263,6 +263,10 @@ class OTPMainWindow(QtCore.QObject):
         self.pa_output = ProjectLayer.from_table(
             project_area, groupname='Eingangsdaten')
         self.pa_output.draw(label='Projektgebiet', redraw=False)
+        addresses = Addresses.get_table(create=True)
+        self.addr_output = ProjectLayer.from_table(
+            addresses, groupname='Eingangsdaten')
+        self.addr_output.draw(label='Adressen', redraw=False)
 
     def apply_project_settings(self, project):
         self.ui.required_green_edit.setValue(self.project_settings.required_green)
