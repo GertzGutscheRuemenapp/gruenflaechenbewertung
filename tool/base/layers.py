@@ -24,7 +24,7 @@ __date__ = '16/07/2019'
 from abc import ABC
 from qgis.core import (QgsProject, QgsVectorLayer, QgsRasterLayer,
                        QgsCoordinateTransform, QgsLayerTreeGroup,
-                       QgsLayerTreeLayer)
+                       QgsLayerTreeLayer, QgsCoordinateReferenceSystem)
 from qgis.utils import iface
 from typing import List
 
@@ -193,7 +193,7 @@ class Layer(ABC):
     def draw(self, style_path: str = None, label: str = '', redraw: str = True,
              checked: bool = True, filter: str = None, expanded: bool = True,
              prepend: bool = False, uncheck_siblings: bool = False,
-             toggle_if_exists=False) -> QgsVectorLayer:
+             toggle_if_exists=False, epsg='') -> QgsVectorLayer:
         '''
         load the data into a vector layer, draw it and add it to the layer tree
 
@@ -240,6 +240,10 @@ class Layer(ABC):
 
         if not self.layer:
             self.layer = QgsVectorLayer(self.data_path, self.layername, "ogr")
+            # workaround: QGIS does not recognize SRS set in OGR source anymore
+            if epsg:
+                crs = QgsCoordinateReferenceSystem(f'epsg:{epsg}')
+                self.layer.setCrs(crs)
             if label:
                 self.layer.setName(label)
             QgsProject.instance().addMapLayer(self.layer, False)

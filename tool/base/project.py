@@ -83,7 +83,7 @@ class Settings(metaclass=Singleton):
     CALC_REACHABILITY_MODE = "THRESHOLD_SUM_AGGREGATOR" # agg. mode that is used to calculate number of reachable destinations (note: threshold is taken from set max travel time)
     INFINITE = 2147483647 # represents indefinite values in the UI, pyqt spin boxes are limited to max int32
 
-    EPSG = 25382
+    EPSG = 25832
 
     '''
     singleton for accessing and storing global settings in files
@@ -611,7 +611,7 @@ class ProjectLayer(Layer):
     def draw(self, style_file: str = None, label: str = '', redraw: str = True,
              checked: bool = True, filter: str = None, expanded: bool = True,
              read_only: bool = True, prepend: bool = False,
-             toggle_if_exists=False, uncheck_siblings: bool = False
+             toggle_if_exists=False, uncheck_siblings: bool = False,
              ) -> QgsVectorLayer:
         '''
         load the data into a vector layer, draw it and add it to the layer tree
@@ -654,11 +654,14 @@ class ProjectLayer(Layer):
         '''
         style_path = os.path.join(settings.TEMPLATE_PATH, 'styles', style_file)\
             if style_file else None
+
         layer = super().draw(style_path=style_path, label=label,
                              checked=checked, filter=filter, redraw=redraw,
                              prepend=prepend, expanded=expanded,
                              uncheck_siblings=uncheck_siblings,
-                             toggle_if_exists=toggle_if_exists)
+                             toggle_if_exists=toggle_if_exists,
+                             epsg=settings.EPSG # workaround for unrecognized OGR SRS
+                             )
         layer.setReadOnly(read_only)
         return layer
 

@@ -19,6 +19,7 @@ class ProjectArea(ProjectTable):
 
     class Meta:
         workspace = 'project'
+        geom = 'Polygon'
 
 
 class Addresses(ProjectTable):
@@ -29,3 +30,4 @@ class Addresses(ProjectTable):
 
     class Meta:
         workspace = 'project'
+        geom = 'Point'

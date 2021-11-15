@@ -312,7 +312,7 @@ class ImportLayerDialog(Dialog):
     def accept(self):
         layer = self.input_layer_combo.currentLayer()
         tr = QgsCoordinateTransform(
-            QgsCoordinateReferenceSystem(self.projection_combo.crs()),
+            self.projection_combo.crs(),
             QgsCoordinateReferenceSystem(f'epsg:{settings.EPSG}'),
             QgsProject.instance()
         )

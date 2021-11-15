@@ -165,7 +165,7 @@ class OTPMainWindow(QtCore.QObject):
             filter_class=QgsMapLayerProxyModel.PointLayer)
         ok = dialog.show()
         if ok:
-            pass
+            self.addr_output.draw(label='Adressen', redraw=False)
 
     def clone_project(self):
         '''
@@ -225,7 +225,11 @@ class OTPMainWindow(QtCore.QObject):
             # wait for canvas to refresh because it blocks the datasources for
             # the layers as long they are visible
             def on_refresh():
-                self.project_manager.remove_project(project)
+                try:
+                    self.project_manager.remove_project(project)
+                except:
+                    # ToDo: catch properly
+                    pass
                 self.project_manager.active_project = None
                 self.canvas.mapCanvasRefreshed.disconnect(on_refresh)
             self.canvas.mapCanvasRefreshed.connect(on_refresh)
