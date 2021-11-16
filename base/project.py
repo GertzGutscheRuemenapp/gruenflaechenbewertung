@@ -73,6 +73,7 @@ DEFAULT_SETTINGS = {
 class Settings(metaclass=Singleton):
     BASE_PATH = BASE_PATH
     UI_PATH = os.path.join(BASE_PATH, 'ui')
+    TEMPLATE_PATH = os.path.join(BASE_PATH, 'templates')
     LATITUDE_COLUMN = 'Y' # field-name used for storing lat values in csv files
     LONGITUDE_COLUMN = 'X' # field-name used for storing lon values in csv files
     ID_COLUMN = 'id' # field-name used for storing the ids in csv files

@@ -319,27 +319,41 @@ class OTPMainWindow(QtCore.QObject):
         addresses = Adressen.get_table(create=True)
         self.addr_output = ProjectLayer.from_table(
             addresses, groupname=groupname)
-        self.addr_output.draw(label='Adressen', redraw=False)
+        self.addr_output.draw(
+            label='Adressen',
+            style_file='adressen.qml',
+            redraw=False)
 
         green_entrances = GruenflaechenEingaenge.get_table(create=True)
         self.green_e_output = ProjectLayer.from_table(
             green_entrances, groupname=groupname)
-        self.green_e_output.draw(label='Grünflächen Eingänge', redraw=False)
+        self.green_e_output.draw(
+            label='Grünflächen Eingänge',
+            style_file='gruen_eingaenge.qml',
+            redraw=False)
 
         green = Gruenflaechen.get_table(create=True)
         self.green_output = ProjectLayer.from_table(
             green, groupname=groupname)
-        self.green_output.draw(label='Grünflächen', redraw=False)
+        self.green_output.draw(
+            label='Grünflächen',
+            style_file='gruenflaechen.qml',
+            redraw=False)
 
         blocks = Baubloecke.get_table(create=True)
         self.blocks_output = ProjectLayer.from_table(
             blocks, groupname=groupname)
-        self.blocks_output.draw(label='Baublöcke', redraw=False)
+        self.blocks_output.draw(label='Baublöcke',
+            style_file='bloecke.qml',
+            redraw=False)
 
         project_area = Projektgebiet.get_table(create=True)
         self.pa_output = ProjectLayer.from_table(
             project_area, groupname=groupname)
-        self.pa_output.draw(label='Projektgebiet', redraw=False)
+        self.pa_output.draw(label='Projektgebiet',
+            style_file='projektgebiet.qml',
+            redraw=False)
+        self.pa_output.zoom_to()
 
     def apply_project_settings(self, project):
         self.ui.required_green_edit.setValue(self.project_settings.required_green)
