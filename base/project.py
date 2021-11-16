@@ -46,7 +46,7 @@ else:
     p = os.path.expanduser('~')# , 'Library/Application Support/')
 
 BASE_PATH = os.path.realpath(
-    os.path.join(os.path.dirname(os.path.realpath(__file__)), '..\..'))
+    os.path.join(os.path.dirname(os.path.realpath(__file__)), '..'))
 APPDATA_PATH = os.path.join(p, 'Gruenflaechenbewertung')
 
 JAVA_DEFAULT = ''

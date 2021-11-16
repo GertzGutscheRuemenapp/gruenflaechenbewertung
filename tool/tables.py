@@ -1,5 +1,5 @@
-from gruenflaechenotp.tool.base.project import ProjectTable
-from gruenflaechenotp.tool.base.database import Field
+from gruenflaechenotp.base.project import ProjectTable
+from gruenflaechenotp.base.database import Field
 
 
 class ProjectSettings(ProjectTable):
@@ -19,7 +19,7 @@ class Projektgebiet(ProjectTable):
 
     class Meta:
         workspace = 'project'
-        geom = 'Polygon'
+        geom = 'MultiPolygon'
 
 
 class Adressen(ProjectTable):
@@ -38,14 +38,14 @@ class Baubloecke(ProjectTable):
 
     class Meta:
         workspace = 'project'
-        geom = 'Polygon'
+        geom = 'MultiPolygon'
 
 
 class Gruenflaechen(ProjectTable):
 
     class Meta:
         workspace = 'project'
-        geom = 'Polygon'
+        geom = 'MultiPolygon'
 
 
 class GruenflaechenEingaenge(ProjectTable):

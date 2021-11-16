@@ -628,7 +628,7 @@ ACHTUNG: wird ignori</string>
            </widget>
           </item>
           <item row="3" column="2">
-           <widget class="QPushButton" name="reset_building_blocks_button">
+           <widget class="QPushButton" name="reset_blocks_button">
             <property name="text">
              <string>auf Default zurücksetzen</string>
             </property>
@@ -693,7 +693,7 @@ ACHTUNG: wird ignori</string>
            </widget>
           </item>
           <item row="3" column="1">
-           <widget class="QPushButton" name="import_building_blocks_button">
+           <widget class="QPushButton" name="import_blocks_button">
             <property name="text">
              <string>Import</string>
             </property>
@@ -737,14 +737,14 @@ ACHTUNG: wird ignori</string>
            </widget>
           </item>
           <item row="6" column="1">
-           <widget class="QPushButton" name="import_green_exits_button">
+           <widget class="QPushButton" name="import_green_entrances_button">
             <property name="text">
              <string>Import</string>
             </property>
            </widget>
           </item>
           <item row="6" column="2">
-           <widget class="QPushButton" name="reset_green_exits_button">
+           <widget class="QPushButton" name="reset_green_entrances_button">
             <property name="text">
              <string>auf Default zurücksetzen</string>
             </property>

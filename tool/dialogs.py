@@ -3,15 +3,14 @@ from builtins import str
 import os
 from PyQt5 import uic, QtCore, QtGui, QtWidgets
 from qgis.gui import QgsMapLayerComboBox, QgsProjectionSelectionWidget
-from qgis.core import (QgsMapLayerProxyModel, QgsCoordinateTransform,
-                       QgsCoordinateReferenceSystem, QgsProject,
-                       QgsGeometry)
+from qgis.core import QgsMapLayerProxyModel
 import copy, os, re, sys, datetime
 from sys import platform
 from shutil import move
 import re
 
-from gruenflaechenotp.tool.base.project import settings, ProjectManager
+from gruenflaechenotp.base.dialogs import Dialog
+from gruenflaechenotp.base.project import settings, ProjectManager
 
 XML_FILTER = u'XML-Dateien (*.xml)'
 CSV_FILTER = u'Comma-seperated values (*.csv)'
@@ -84,53 +83,6 @@ def parse_version(meta_file):
         if match:
             return match.group(1)
     return 'not found'
-
-
-class Dialog(QtWidgets.QDialog):
-    '''
-    Dialog
-    '''
-    ui_file = ''
-    def __init__(self, ui_file: str = None, modal: bool = True,
-                 parent: QtWidgets.QWidget = None, title: str = None):
-        '''
-        Parameters
-        ----------
-        ui_file : str, optional
-            path to QT-Designer xml file to load UI of dialog from,
-            if only filename is given, the file is looked for in the standard
-            folder (UI_PATH), defaults to not using ui file
-        modal : bool, optional
-            set dialog to modal if True, not modal if False, defaults to modal
-        parent: QWidget, optional
-            parent widget, defaults to None
-        title: str, optional
-            replaces title of dialog if given, defaults to preset title
-        '''
-
-        super().__init__(parent=parent)
-        ui_file = ui_file or self.ui_file
-        if ui_file:
-            # look for file ui folder if not found
-            ui_file = ui_file if os.path.exists(ui_file) \
-                else os.path.join(settings.UI_PATH, ui_file)
-            uic.loadUi(ui_file, self)
-        if title:
-            self.setWindowTitle(title)
-        self.setModal(modal)
-        self.setupUi()
-
-    def setupUi(self):
-        '''
-        override this to set up the user interface
-        '''
-        pass
-
-    def show(self):
-        '''
-        override, show the dialog
-        '''
-        return self.exec_()
 
 
 class InfoDialog(QtWidgets.QDialog, INFO_FORM_CLASS):
@@ -229,14 +181,14 @@ class NewProjectDialog(Dialog):
 
 class ImportLayerDialog(Dialog):
 
-    def __init__(self, table, title='Layer importieren',
+    def __init__(self, title='Layer importieren',
                  filter_class=QgsMapLayerProxyModel.VectorLayer,
-                 help_text='',
+                 help_text='', required_fields=[],
                  optional_fields=[], **kwargs):
-        self.table = table
         self.title = title
         self.filter_class = filter_class
         self.optional_fields = optional_fields
+        self.required_fields = required_fields
         self.help_text = help_text
         super().__init__(**kwargs)
 
@@ -265,13 +217,22 @@ class ImportLayerDialog(Dialog):
             spacer = QtWidgets.QSpacerItem(0, 20, QtWidgets.QSizePolicy.Fixed)
             layout.addItem(spacer)
 
+        def add_input(label_text):
+            label = QtWidgets.QLabel(label_text)
+            combo = QtWidgets.QComboBox()
+            layout.addWidget(label)
+            layout.addWidget(combo)
+            return combo
+
+        self._required_inputs = []
+        for field_name, field_label in self.required_fields:
+            r_input = add_input(field_label)
+            self._required_inputs.append(r_input)
+            r_input.currentTextChanged.connect(self.validate)
+
         self._optional_inputs = []
         for field_name, field_label in self.optional_fields:
-            label = QtWidgets.QLabel(f'{field_label} (optional)')
-            o_input = QtWidgets.QComboBox()
-            self._optional_inputs.append(o_input)
-            layout.addWidget(label)
-            layout.addWidget(o_input)
+            self._optional_inputs.append(add_input(f'{field_label} (optional)'))
 
         if self.help_text:
             spacer = QtWidgets.QSpacerItem(0, 10, QtWidgets.QSizePolicy.Fixed)
@@ -291,55 +252,51 @@ class ImportLayerDialog(Dialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-        self.ok_button.setEnabled(False)
         self.input_layer_combo.layerChanged.connect(self.validate)
         self.projection_combo.crsChanged.connect(self.validate)
         self.layer_changed(self.input_layer_combo.currentLayer())
+        self.validate()
 
     def layer_changed(self, layer):
         if not layer:
             return
         field_names = ['-'] + [f.name() for f in layer.fields()]
-        for o_input in self._optional_inputs:
-            o_input.addItems(field_names)
+        for _input in self._optional_inputs + self._required_inputs:
+            _input.clear()
+            _input.addItems(field_names)
 
         crs = layer.crs()
         self.projection_combo.setCrs(crs)
-
-    def accept(self):
-        layer = self.input_layer_combo.currentLayer()
-        tr = QgsCoordinateTransform(
-            self.projection_combo.crs(),
-            QgsCoordinateReferenceSystem(f'epsg:{settings.EPSG}'),
-            QgsProject.instance()
-        )
-        self.table.delete_rows()
-        o_fields = [(f_in, f_out ) for f_in, f_out in zip(
-            [i.currentText() for i in self._optional_inputs],
-            [f[0] for f in self.optional_fields]) if f_in != '-']
-
-        for feature in layer.getFeatures():
-            geom = QgsGeometry(feature.geometry())
-            if geom.isGeosValid():
-                geom.transform(tr)
-            else:
-                geom = QgsGeometry()
-            fields = {}
-            for f_in, f_out in o_fields:
-                fields[f_out] = feature.attribute(f_in)
-            self.table.add(geom=geom, **fields)
-
-        self.close()
 
     def validate(self):
         layer = self.input_layer_combo.currentLayer()
         error = (not layer or
                  not layer.isValid() or
                  not self.projection_combo.crs().authid())
+        if not error:
+            for r_input in self._required_inputs:
+                if r_input.currentText() == '-':
+                    error = True
+                    break
         self.ok_button.setEnabled(not error)
 
+    def show(self):
+        '''
+        show dialog and return selections made by user
+        '''
+        confirmed = self.exec_()
+        if confirmed:
+            layer = self.input_layer_combo.currentLayer()
+            o_fields = [(f_in, f_out ) for f_in, f_out in zip(
+                [i.currentText() for i in self._optional_inputs],
+                [f[0] for f in self.optional_fields]) if f_in != '-']
+            r_fields = list(zip([i.currentText() for i in self._required_inputs],
+                                [f[0] for f in self.required_fields]))
+            return confirmed, layer, self.projection_combo.crs(), o_fields + r_fields
+        return False, None, None, None
 
-class ProgressDialog(QtWidgets.QDialog, PROGRESS_FORM_CLASS):
+
+class BatchProgressDialog(QtWidgets.QDialog, PROGRESS_FORM_CLASS):
     """
     Dialog showing progress in textfield and bar after starting a certain task with run()
     """
@@ -396,7 +353,7 @@ class ProgressDialog(QtWidgets.QDialog, PROGRESS_FORM_CLASS):
         self.elapsed_time_label.setText(timer_text)
 
 
-class ExecOTPDialog(ProgressDialog):
+class ExecOTPDialog(BatchProgressDialog):
     """
     ProgressDialog extented by an executable external process
 
@@ -513,7 +470,7 @@ class ExecOTPDialog(ProgressDialog):
         self.timer.start(1000)
 
 
-class ExecCreateRouterDialog(ProgressDialog):
+class ExecCreateRouterDialog(BatchProgressDialog):
     def __init__(self, source_folder, target_folder,
                  java_executable, otp_jar, memory=2,
                  parent=None):

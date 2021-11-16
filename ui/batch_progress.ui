@@ -33,12 +33,12 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_2">
    <item>
-    <widget class="QPlainTextEdit" name="log_edit">
+    <widget class="QTextEdit" name="log_edit">
      <property name="horizontalScrollBarPolicy">
-      <enum>Qt::ScrollBarAsNeeded</enum>
+      <enum>Qt::ScrollBarAlwaysOn</enum>
      </property>
      <property name="lineWrapMode">
-      <enum>QPlainTextEdit::NoWrap</enum>
+      <enum>QTextEdit::NoWrap</enum>
      </property>
      <property name="readOnly">
       <bool>true</bool>
@@ -75,14 +75,7 @@
       </spacer>
      </item>
      <item>
-      <widget class="QCheckBox" name="auto_close_check">
-       <property name="text">
-        <string>automatisch schließen</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="start_button">
+      <widget class="QPushButton" name="startButton">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
          <horstretch>0</horstretch>
@@ -97,8 +90,8 @@
        </property>
        <property name="maximumSize">
         <size>
-         <width>16777215</width>
-         <height>16777215</height>
+         <width>87</width>
+         <height>23</height>
         </size>
        </property>
        <property name="text">
@@ -107,14 +100,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="stop_button">
-       <property name="text">
-        <string>Stop</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="close_button">
+      <widget class="QPushButton" name="cancelButton">
        <property name="minimumSize">
         <size>
          <width>87</width>
@@ -123,12 +109,12 @@
        </property>
        <property name="maximumSize">
         <size>
-         <width>16777215</width>
+         <width>87</width>
          <height>23</height>
         </size>
        </property>
        <property name="text">
-        <string>Schließen</string>
+        <string>Abbrechen</string>
        </property>
       </widget>
      </item>
