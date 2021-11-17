@@ -37,7 +37,7 @@ class CloneProject(Worker):
 
 class ImportLayer(Worker):
     '''
-    worker for cloning a project
+    worker for importing data into project tables
     '''
     def __init__(self, table, layer, layer_crs, fields=[], parent=None):
         super().__init__(parent=parent)
@@ -45,7 +45,6 @@ class ImportLayer(Worker):
         self.layer_crs = layer_crs
         self.fields = fields
         self.table = table
-        self.project_manager = ProjectManager()
 
     def work(self):
         self.log('Lösche vorhandene Features...')
@@ -87,3 +86,30 @@ class ImportLayer(Worker):
             self.log(f'{n_broken_geometries} Features haben keine oder defekte '
                      'Geometrien. Sie wurden ohne Geometrie in das Projekt '
                      'übernommen', warning=True)
+
+
+class ResetLayers(Worker):
+    '''
+    worker for resetting project tables to defaults
+    '''
+    def __init__(self, tables, parent=None):
+        super().__init__(parent=parent)
+        self.tables = tables
+        self.project_manager = ProjectManager()
+
+    def work(self):
+        for i, table in enumerate(self.tables):
+            self.log(f'Zurücksetzung der Tabelle "{table.name}"...')
+            table.delete_rows()
+            self.log('Importiere Standard-Features...')
+            base_table = self.project_manager.basedata.get_table(
+                table.name, workspace='project')
+            fields = table.fields()
+            for feat in base_table.features():
+                attrs = dict((f.name, feat[f.name]) for f in fields)
+                table.add(geom=feat.geom, **attrs)
+            self.set_progress((i+1) / len(self.tables) * 100)
+
+
+
+

@@ -8,3 +8,5 @@
 *.*~
 /.project
 /.pydevproject
+/templates/data/*.gpkg-wal
+/templates/data/*.gpkg-shm

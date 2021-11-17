@@ -1,13 +1,12 @@
 import os
 from PyQt5 import uic,  QtCore, QtWidgets
-
 from qgis import utils
 from qgis._core import (QgsVectorLayer, QgsVectorLayerJoinInfo,
                         QgsCoordinateReferenceSystem)
 from qgis.core import QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel
 
 from gruenflaechenotp.base.project import (ProjectManager, settings,
-                                                ProjectLayer, OSMBackgroundLayer)
+                                           ProjectLayer, OSMBackgroundLayer)
 from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, RouterDialog, InfoDialog,
                                            SettingsDialog, NewProjectDialog,
                                            ImportLayerDialog)
@@ -16,7 +15,7 @@ from gruenflaechenotp.tool.tables import (ProjectSettings, Projektgebiet,
                                           Adressen, Baubloecke, Gruenflaechen,
                                           GruenflaechenEingaenge)
 from gruenflaechenotp.base.dialogs import ProgressDialog
-from gruenflaechenotp.tool.jobs import CloneProject, ImportLayer
+from gruenflaechenotp.tool.jobs import CloneProject, ImportLayer, ResetLayers
 
 import tempfile
 import shutil
@@ -44,6 +43,10 @@ class OTPMainWindow(QtCore.QObject):
         self.project_settings = None
         graph_path = self.project_manager.settings.graph_path
         self.canvas = utils.iface.mapCanvas()
+        #project = QgsProject.instance()
+        #crs = QgsCoordinateReferenceSystem(f'epsg:{settings.EPSG}')
+        #project.setCrs(crs)
+        #self.canvas.mapSettings().setDestinationCrs(crs)
         if graph_path and not os.path.exists(graph_path):
             try:
                 os.makedirs(graph_path)
@@ -148,8 +151,18 @@ class OTPMainWindow(QtCore.QObject):
             self.ui.project_combo.setCurrentIndex(
                 self.ui.project_combo.count() - 1)
 
+            job = ResetLayers(tables=[
+                Projektgebiet.get_table(create=True),
+                Baubloecke.get_table(create=True),
+                Gruenflaechen.get_table(create=True),
+                Adressen.get_table(create=True),
+                GruenflaechenEingaenge.get_table(create=True)
+            ])
+            dialog = ProgressDialog(job, parent=self.ui)
+            dialog.show()
+
     def import_project_area(self):
-        table = Projektgebiet.get_table(create=True)
+        table = Projektgebiet.get_table()
         dialog = ImportLayerDialog(
             title='Projektgebiet importieren',
             filter_class=QgsMapLayerProxyModel.PolygonLayer)
@@ -162,7 +175,7 @@ class OTPMainWindow(QtCore.QObject):
             dialog.show()
 
     def import_green_spaces(self):
-        table = Gruenflaechen.get_table(create=True)
+        table = Gruenflaechen.get_table()
         dialog = ImportLayerDialog(
             title='Grünflächen importieren',
             filter_class=QgsMapLayerProxyModel.PolygonLayer)
@@ -175,7 +188,7 @@ class OTPMainWindow(QtCore.QObject):
             dialog.show()
 
     def import_blocks(self):
-        table = Baubloecke.get_table(create=True)
+        table = Baubloecke.get_table()
         dialog = ImportLayerDialog(
             title='Baublöcke importieren',
             required_fields=[('einwohner', 'Anzahl Einwohner')],
@@ -189,7 +202,7 @@ class OTPMainWindow(QtCore.QObject):
             dialog.show()
 
     def import_addresses(self):
-        table = Adressen.get_table(create=True)
+        table = Adressen.get_table()
         dialog = ImportLayerDialog(
             title='Adressen importieren',
             optional_fields=[
@@ -208,7 +221,7 @@ class OTPMainWindow(QtCore.QObject):
             dialog.show()
 
     def import_green_entrances(self):
-        table = GruenflaechenEingaenge.get_table(create=True)
+        table = GruenflaechenEingaenge.get_table()
         dialog = ImportLayerDialog(
             title='Grünflächeneingänge importieren',
             filter_class=QgsMapLayerProxyModel.PointLayer)
@@ -231,7 +244,7 @@ class OTPMainWindow(QtCore.QObject):
         ok, project_name = dialog.show()
 
         if ok:
-            job = CloneProject(name, project, parent=self.ui)
+            job = CloneProject(project_name, project, parent=self.ui)
             def on_success(project):
                 self.ui.project_combo.addItem(project.name, project)
                 self.ui.project_combo.setCurrentIndex(
@@ -284,7 +297,6 @@ class OTPMainWindow(QtCore.QObject):
                 self.project_manager.active_project = None
                 self.canvas.mapCanvasRefreshed.disconnect(on_refresh)
             self.canvas.mapCanvasRefreshed.connect(on_refresh)
-            self.canvas.mapCanvasRefreshed
             self.canvas.refreshAllLayers()
 
     def change_project(self, project):
@@ -353,6 +365,7 @@ class OTPMainWindow(QtCore.QObject):
         self.pa_output.draw(label='Projektgebiet',
             style_file='projektgebiet.qml',
             redraw=False)
+
         self.pa_output.zoom_to()
 
     def apply_project_settings(self, project):
@@ -678,11 +691,31 @@ class OTPMainWindow(QtCore.QObject):
         '''
         override, set inactive on close
         '''
+        self.close_all_projects()
         try:
             self.ui.close()
         # ui might already be deleted by QGIS
         except RuntimeError:
             pass
+
+    def close_all_projects(self):
+        '''
+        remove all project-related layers and try to close all workspaces
+        '''
+        qgisproject = QgsProject.instance()
+        layer_root = qgisproject.layerTreeRoot()
+        # remove all project layers from layer tree
+        for project in self.project_manager.projects:
+            group = layer_root.findGroup(project.groupname)
+            if group:
+                for layer in group.findLayers():
+                    qgisproject.removeMapLayer(layer.layerId())
+                group.removeAllChildren()
+                layer_root.removeChildNode(group)
+        for ws in Workspace.get_instances():
+            if not ws.database.read_only:
+                ws.close()
+        self.canvas.refreshAllLayers()
 
     def show(self):
         '''

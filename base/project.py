@@ -74,6 +74,7 @@ class Settings(metaclass=Singleton):
     BASE_PATH = BASE_PATH
     UI_PATH = os.path.join(BASE_PATH, 'ui')
     TEMPLATE_PATH = os.path.join(BASE_PATH, 'templates')
+    BASE_DATA_PATH = os.path.join(TEMPLATE_PATH, 'data')
     LATITUDE_COLUMN = 'Y' # field-name used for storing lat values in csv files
     LONGITUDE_COLUMN = 'X' # field-name used for storing lon values in csv files
     ID_COLUMN = 'id' # field-name used for storing the ids in csv files
@@ -301,6 +302,8 @@ class ProjectManager(metaclass=Singleton):
     settings = settings
 
     def __init__(self):
+        self.basedata = Geopackage(base_path=settings.BASE_DATA_PATH,
+                                   read_only=True)
         self.load()
 
     def load(self):
@@ -449,7 +452,7 @@ class ProjectTable:
         project = project or ProjectManager().active_project
         #Database = getattr(cls.Meta, 'database', Geopackage)
         workspace_name = getattr(cls.Meta, 'workspace', 'default')
-        table_name = getattr(cls.Meta, 'name', cls.__name__.lower())
+        table_name = cls.get_name()
         geometry_type = getattr(cls.Meta, 'geom', None)
         database = project.data
         workspace = database.get_or_create_workspace(workspace_name)
@@ -467,9 +470,14 @@ class ProjectTable:
             table = cls._create(table_name, workspace,
                                 geometry_type=geometry_type)
         return table
+
     @staticmethod
     def _where(kwargs):
         pass
+
+    @classmethod
+    def get_name(cls):
+        return getattr(cls.Meta, 'name', cls.__name__.lower())
 
     @classmethod
     def features(cls, project: Project = None, create: bool = False
