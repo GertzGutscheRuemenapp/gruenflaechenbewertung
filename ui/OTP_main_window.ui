@@ -686,7 +686,7 @@ ACHTUNG: wird ignori</string>
            </widget>
           </item>
           <item row="0" column="2">
-           <widget class="QPushButton" name="reset_green_exits_button_2">
+           <widget class="QPushButton" name="reset_project_area_button">
             <property name="text">
              <string>auf Default zurücksetzen</string>
             </property>

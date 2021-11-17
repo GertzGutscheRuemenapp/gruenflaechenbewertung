@@ -109,6 +109,17 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.import_blocks_button.clicked.connect(self.import_blocks)
         self.ui.import_addresses_button.clicked.connect(self.import_addresses)
 
+        self.ui.reset_project_area_button.clicked.connect(
+            lambda: self.reset_layer(Projektgebiet))
+        self.ui.reset_green_spaces_button.clicked.connect(
+            lambda: self.reset_layer(Gruenflaechen))
+        self.ui.reset_green_entrances_button.clicked.connect(
+            lambda: self.reset_layer(GruenflaechenEingaenge))
+        self.ui.reset_blocks_button.clicked.connect(
+            lambda: self.reset_layer(Baubloecke))
+        self.ui.reset_addresses_button.clicked.connect(
+            lambda: self.reset_layer(Adressen))
+
         # router
         self.setup_projects()
 
@@ -232,6 +243,13 @@ class OTPMainWindow(QtCore.QObject):
                 job, parent=self.ui,
                 on_success=lambda x: self.green_e_output.draw(redraw=False))
             dialog.show()
+
+    def reset_layer(self, table_class):
+        job = ResetLayers(tables=[table_class.get_table()])
+        dialog = ProgressDialog(
+            job, parent=self.ui,
+            on_success=lambda x: self.canvas.refreshAllLayers())
+        dialog.show()
 
     def clone_project(self):
         '''

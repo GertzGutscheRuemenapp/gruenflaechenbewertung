@@ -190,6 +190,7 @@ class ImportLayerDialog(Dialog):
         self.optional_fields = optional_fields
         self.required_fields = required_fields
         self.help_text = help_text
+        self.project_manager = ProjectManager()
         super().__init__(**kwargs)
 
     def setupUi(self):
@@ -241,6 +242,12 @@ class ImportLayerDialog(Dialog):
             layout.addItem(spacer)
             layout.addWidget(label)
 
+        spacer = QtWidgets.QSpacerItem(0, 10, QtWidgets.QSizePolicy.Fixed)
+        self.error_label = QtWidgets.QLabel()
+        self.error_label.setStyleSheet('color: red')
+        layout.addItem(spacer)
+        layout.addWidget(self.error_label)
+
         spacer = QtWidgets.QSpacerItem(0, 10, QtWidgets.QSizePolicy.Minimum,
                                        QtWidgets.QSizePolicy.Expanding)
         layout.addItem(spacer)
@@ -269,16 +276,25 @@ class ImportLayerDialog(Dialog):
         self.projection_combo.setCrs(crs)
 
     def validate(self):
+        error_message = None
         layer = self.input_layer_combo.currentLayer()
-        error = (not layer or
-                 not layer.isValid() or
-                 not self.projection_combo.crs().authid())
-        if not error:
+        project = self.project_manager.active_project
+        if not layer:
+            error_message = 'Kein Layer ausgewählt'
+        elif not layer.isValid():
+            error_message = 'Der gewählte Layer enthält Fehler'
+        elif not self.projection_combo.crs().authid():
+            error_message = 'Keine Projektion ausgewählt'
+        elif project.data.base_path in layer.source():
+            error_message = 'Der ausgewählte Layer darf nicht im aktiven Projekt liegen'
+        if not error_message:
             for r_input in self._required_inputs:
                 if r_input.currentText() == '-':
-                    error = True
+                    error_message = 'Benötigtes Eingabefeld nicht ausgewählt'
                     break
-        self.ok_button.setEnabled(not error)
+
+        self.error_label.setText(error_message)
+        self.ok_button.setEnabled(not error_message)
 
     def show(self):
         '''
