@@ -2,8 +2,7 @@ import os
 import math
 from PyQt5 import uic,  QtCore, QtWidgets
 from qgis import utils
-from qgis._core import (QgsVectorLayer, QgsVectorLayerJoinInfo,
-                        QgsCoordinateReferenceSystem)
+from qgis._core import QgsCoordinateReferenceSystem
 from qgis.core import QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel
 
 from gruenflaechenotp.base.project import (ProjectManager, settings,
@@ -16,16 +15,13 @@ from gruenflaechenotp.tool.tables import (ProjectSettings, Projektgebiet,
                                           Adressen, Baubloecke, Gruenflaechen,
                                           GruenflaechenEingaenge)
 from gruenflaechenotp.base.dialogs import ProgressDialog
-from gruenflaechenotp.tool.jobs import CloneProject, ImportLayer, ResetLayers
+from gruenflaechenotp.tool.jobs import (CloneProject, ImportLayer, ResetLayers,
+                                        AnalyseRouting)
 from gruenflaechenotp.batch.config import Config as OTPConfig
 
 import tempfile
-import shutil
-import getpass
-import csv
+import pandas as pd
 import webbrowser
-
-from datetime import datetime
 
 TITLE = "Grünflächenbewertung"
 
@@ -123,7 +119,7 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.reset_addresses_button.clicked.connect(
             lambda: self.reset_layer(Adressen))
 
-        self.ui.start_calculation_button.clicked.connect(self.calculate)
+        self.ui.start_calculation_button.clicked.connect(self.route)
         # router
         self.setup_projects()
 
@@ -437,8 +433,7 @@ class OTPMainWindow(QtCore.QObject):
             self.project_settings.router = self.ui.router_combo.currentText()
             self.project_settings.save()
 
-    def calculate(self):
-
+    def route(self):
         otp_jar = settings.system['otp_jar_file']
         if not os.path.exists(otp_jar):
             msg_box = QtWidgets.QMessageBox(
@@ -530,7 +525,13 @@ class OTPMainWindow(QtCore.QObject):
         diag.show()
 
     def analyse(self, target_file):
-        pass
+        # for some reason pandas automatically replaces underscores in header
+        # with spaces, no possibility to turn that off
+
+        job = AnalyseRouting(target_file, self.green_output.layer.getFeatures(),
+                             parent=self.ui)
+        dialog = ProgressDialog(job, parent=self.ui)
+        dialog.show()
 
     def create_router(self):
         java_executable = settings.system['java']

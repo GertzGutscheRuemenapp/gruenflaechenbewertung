@@ -71,7 +71,7 @@ class ProgressDialog(Dialog):
 
     def __init__(self, worker: Worker, parent: QObject = None,
                  auto_close: bool = False, auto_run: bool = True,
-                 hide_auto_close: bool = False,
+                 hide_auto_close: bool = False, title=None,
                  on_success: object = None, on_close: object = None):
         '''
         Parameters
@@ -96,7 +96,8 @@ class ProgressDialog(Dialog):
             closing
         '''
         # parent = parent or iface.mainWindow()
-        super().__init__(self.ui_file, modal=True, parent=parent)
+        super().__init__(self.ui_file, title=title,
+                         modal=True, parent=parent)
         self.parent = parent
         self.setupUi()
         self.setAttribute(Qt.WA_DeleteOnClose)
@@ -104,7 +105,7 @@ class ProgressDialog(Dialog):
         self.stop_button.setVisible(False)
         self.close_button.setVisible(False)
         self.auto_close_check.setChecked(auto_close)
-        self.auto_close_check.setVisible(not self.hide_auto_close)
+        self.auto_close_check.setVisible(not hide_auto_close)
         self.auto_run = auto_run
         # ToDo: use signals instead of callbacks
         self.on_success = on_success

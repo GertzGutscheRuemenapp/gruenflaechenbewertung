@@ -105,7 +105,7 @@ class CSVWriter(object):
                 write_header = False
 
         with open(self.target_csv, fmode) as f_csv:
-            writer = csv.writer(f_csv, delimiter=';')
+            writer = csv.writer(f_csv, delimiter=';', lineterminator='\r')
 
             if write_header:
                 writer.writerow(header)

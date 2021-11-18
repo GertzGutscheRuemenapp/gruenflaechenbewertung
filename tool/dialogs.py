@@ -324,7 +324,7 @@ class ExecOTPDialog(ProgressDialog):
     """
     def __init__(self, command, n_points=0, points_per_tick=50,
                  **kwargs):
-        super().__init__(None, **kwargs)
+        super().__init__(None, title='OTP Routing', **kwargs)
 
         # QProcess object for external app
         self.process = QtCore.QProcess(self)
@@ -336,14 +336,11 @@ class ExecOTPDialog(ProgressDialog):
 
         # Just to prevent accidentally running multiple times
         # Disable the button when process starts, and enable it when it finishes
-        self.process.finished.connect(self._finished)
+        self.process.finished.connect(self._success)
 
         # how often will the stdout-indicator written before reaching 100%
         n_ticks = float(n_points) / points_per_tick
         tick_indicator = 'Processing:'
-
-        # leave some space for post processing
-        max_progress = 98.
 
         def show_progress():
             out = self.process.readAllStandardOutput()
@@ -353,8 +350,8 @@ class ExecOTPDialog(ProgressDialog):
             if len(out):
                 self.show_status(out)
                 if tick_indicator in out and n_ticks:
-                    self.ticks += max_progress / n_ticks
-                    self.progress_bar.setValue(min(max_progress, int(self.ticks)))
+                    self.ticks += 100 / n_ticks
+                    self.progress_bar.setValue(min(100, int(self.ticks)))
             if len(err):
                 self.on_error(err)
 
@@ -367,10 +364,10 @@ class ExecOTPDialog(ProgressDialog):
     def kill(self):
         self.timer.stop()
         self.killed = True
+        self.error = True
         self.process.kill()
         self.log_edit.insertHtml('<b> Vorgang abgebrochen </b> <br>')
         self.log_edit.moveCursor(QtGui.QTextCursor.End)
-        self.success = False
 
     def run(self):
         super().run()
