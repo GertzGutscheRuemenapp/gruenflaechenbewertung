@@ -311,7 +311,9 @@ class GeopackageTable(Table):
         ''' ogr feature to table row (dict with field names as keys and field
         values as values) '''
         if self.field_names is not None:
-            items = OrderedDict([(f, feat[f]) for f in self.field_names
+            items = OrderedDict([(f, feat[f] if not isinstance(feat[f], str)
+                                  else feat[f].replace('"', ''))
+                                 for f in self.field_names
                                  if hasattr(feat, f)])
         else:
             items = OrderedDict(self._cursor.items())

@@ -7,12 +7,11 @@ to be used with Jython (Java Bindings!)
 @author: Christoph Franke
 '''
 #!/usr/bin/jython
-from config import (DATETIME_FORMAT, INFINITE)
+from config import (DATETIME_FORMAT, INFINITE, Config)
 from otp_eval import OTPEvaluation, CSVWriter
 from argparse import ArgumentParser
 from datetime import datetime, timedelta
 import sys
-from config import Config
 
 if __name__ == '__main__':
     parser = ArgumentParser(description="Batch Analysis with OpenTripPlanner")
@@ -60,8 +59,7 @@ if __name__ == '__main__':
 
     # config.read(options.config_file)
 
-    config = Config()
-    config.read(options.config_file)
+    config = Config(filename=options.config_file)
 
     # router
     router_config = config.settings['router_config']
@@ -101,7 +99,7 @@ if __name__ == '__main__':
     # times
     times = config.settings['time']
     dt = times['datetime']
-    date_times = [datetime.strptime(dt, DATETIME_FORMAT)]
+    date_times = [datetime.strptime(dt, DATETIME_FORMAT)] if dt else [datetime.now()]
     arrive_by = times['arrive_by'] == 'True'
     smart_search = False
     if 'time_batch' in times and times['time_batch']['active'] == 'True':

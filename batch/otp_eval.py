@@ -14,6 +14,7 @@ from org.opentripplanner.scripting.api import OtpsEntryPoint
 from org.opentripplanner.scripting.api import OtpsAggregate, OtpsAccumulate
 from config import (LONGITUDE_COLUMN, LATITUDE_COLUMN, DATETIME_FORMAT,
                     AGGREGATION_MODES, ACCUMULATION_MODES, OUTPUT_DATE_FORMAT)
+
 from datetime import datetime
 import csv
 import os

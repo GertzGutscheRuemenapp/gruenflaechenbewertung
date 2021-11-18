@@ -1,4 +1,5 @@
 import os
+import math
 from PyQt5 import uic,  QtCore, QtWidgets
 from qgis import utils
 from qgis._core import (QgsVectorLayer, QgsVectorLayerJoinInfo,
@@ -16,6 +17,7 @@ from gruenflaechenotp.tool.tables import (ProjectSettings, Projektgebiet,
                                           GruenflaechenEingaenge)
 from gruenflaechenotp.base.dialogs import ProgressDialog
 from gruenflaechenotp.tool.jobs import CloneProject, ImportLayer, ResetLayers
+from gruenflaechenotp.batch.config import Config as OTPConfig
 
 import tempfile
 import shutil
@@ -89,7 +91,8 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.project_buffer_edit.valueChanged.connect(
             lambda x: save_project_setting('project_buffer', x))
 
-        ##self.router_combo.setValue(project_settings.router)
+        self.ui.router_combo.currentTextChanged.connect(
+            lambda x: save_project_setting('router', x))
         self.ui.walk_speed_edit.valueChanged.connect(
             lambda x: save_project_setting('walk_speed', x))
         self.ui.wheelchair_check.stateChanged.connect(
@@ -120,6 +123,7 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.reset_addresses_button.clicked.connect(
             lambda: self.reset_layer(Adressen))
 
+        self.ui.start_calculation_button.clicked.connect(self.calculate)
         # router
         self.setup_projects()
 
@@ -241,7 +245,7 @@ class OTPMainWindow(QtCore.QObject):
             job = ImportLayer(table, layer, crs, fields=fields, parent=self.ui)
             dialog = ProgressDialog(
                 job, parent=self.ui,
-                on_success=lambda x: self.green_e_output.draw(redraw=False))
+                on_success=lambda x: self.green_entrances_output.draw(redraw=False))
             dialog.show()
 
     def reset_layer(self, table_class):
@@ -320,9 +324,14 @@ class OTPMainWindow(QtCore.QObject):
     def change_project(self, project):
         if not project:
             self.ui.tabWidget.setEnabled(False)
+            self.ui.start_calculation_button.setEnabled(False)
             return
+        try:
+            self.project_settings = ProjectSettings.features(project=project)[0]
+        except FileNotFoundError:
+            return
+        self.ui.start_calculation_button.setEnabled(True)
         self.project_manager.active_project = project
-        self.project_settings = ProjectSettings.features(project=project)[0]
         # ToDo: load layers and settings
         try:
             self.apply_project_settings(project)
@@ -355,9 +364,9 @@ class OTPMainWindow(QtCore.QObject):
             redraw=False)
 
         green_entrances = GruenflaechenEingaenge.get_table(create=True)
-        self.green_e_output = ProjectLayer.from_table(
+        self.green_entrances_output = ProjectLayer.from_table(
             green_entrances, groupname=groupname)
-        self.green_e_output.draw(
+        self.green_entrances_output.draw(
             label='Grünflächen Eingänge',
             style_file='gruen_eingaenge.qml',
             redraw=False)
@@ -400,7 +409,8 @@ class OTPMainWindow(QtCore.QObject):
 
     def setup_routers(self):
         # try to keep old router selected
-        saved_router = self.project_settings.router
+        current_router = self.project_settings.router
+        self.ui.router_combo.blockSignals(True)
         self.ui.router_combo.clear()
         idx = 0
         graph_path = settings.graph_path
@@ -417,258 +427,110 @@ class OTPMainWindow(QtCore.QObject):
                     graph_file = os.path.join(path, 'Graph.obj')
                     if os.path.exists(graph_file):
                         self.ui.router_combo.addItem(subdir)
-                        if saved_router == subdir:
+                        if current_router and current_router == subdir:
                             idx = i
             self.ui.router_combo.setEnabled(True)
             self.ui.create_router_button.setEnabled(True)
         self.ui.router_combo.setCurrentIndex(idx)
+        self.ui.router_combo.blockSignals(False)
+        if not current_router:
+            self.project_settings.router = self.ui.router_combo.currentText()
+            self.project_settings.save()
 
-    def start_origin_destination(self):
-        if not self.ui.router_combo.isEnabled():
-            msg_box = QMessageBox(
-                QMessageBox.Warning, "Fehler",
-                u'Es ist kein gültiger Router eingestellt')
+    def calculate(self):
+
+        otp_jar = settings.system['otp_jar_file']
+        if not os.path.exists(otp_jar):
+            msg_box = QtWidgets.QMessageBox(
+                QtWidgets.QMessageBox.Warning, "Fehler",
+                u'Die angegebene OTP Datei existiert nicht!')
+            msg_box.exec_()
+            return
+        jython_jar = settings.system['jython_jar_file']
+        if not os.path.exists(jython_jar):
+            msg_box = QtWidgets.QMessageBox(
+                QtWidgets.QMessageBox.Warning, "Fehler",
+                u'Der angegebene Jython Interpreter existiert nicht!')
+            msg_box.exec_()
+            return
+        java_executable = settings.system['java']
+        memory = settings.system['reserved']
+        if not os.path.exists(java_executable):
+            msg_box = QtWidgets.QMessageBox(
+                QtWidgets.QMessageBox.Warning, "Fehler",
+                u'Der angegebene Java-Pfad existiert nicht!')
             msg_box.exec_()
             return
 
-        # update postprocessing settings
-        postproc = config.settings['post_processing']
-        agg_acc = postproc['aggregation_accumulation']
-        agg_acc['active'] = False
-        best_of = ''
-        if self.ui.bestof_check.isChecked():
-            best_of = self.ui.bestof_edit.value()
-        postproc['best_of'] = best_of
-        details = self.ui.details_check.isChecked()
-        postproc['details'] = details
-        dest_data = self.ui.dest_data_check.isChecked()
-        postproc['dest_data'] = dest_data
-        if self.ui.orig_dest_csv_check.checkState():
-            file_preset = '{}-{}-{}.csv'.format(
-                self.ui.router_combo.currentText(),
-                self.ui.origins_combo.currentText(),
-                self.ui.destinations_combo.currentText()
-                )
+        self.add_input_layers() # reload to make sure they are there
+        origin_layer = self.green_entrances_output.layer
+        destination_layer = self.addr_output.layer
+        o_fid_idx = [f.name() for f in origin_layer.fields()].index('fid')
+        d_fid_idx = [f.name() for f in destination_layer.fields()].index('fid')
 
-            file_preset = os.path.join(self.prev_directory, file_preset)
-            target_file = browse_file(file_preset,
-                                      u'Ergebnisse speichern unter',
-                                      CSV_FILTER, parent=self.ui)
-            if not target_file:
-                return
-            self.prev_directory = os.path.split(target_file)[0]
-        else:
-            target_file = None
-        add_results = self.ui.orig_dest_add_check.isChecked()
-        result_layer_name = None
-        if add_results:
-            preset = 'results-{}-{}'.format(
-                self.ui.router_combo.currentText(),
-                self.ui.origins_combo.currentText())
-            result_layer_name, ok = QInputDialog.getText(
-                None, 'Layer benennen',
-                'Name der zu erzeugenden Ergebnistabelle:',
-                QLineEdit.Normal,
-                preset)
-            if not ok:
-                return
-        self.call(target_file=target_file, add_results=add_results,
-                  result_layer_name=result_layer_name)
+        wgs84 = QgsCoordinateReferenceSystem(4326)
 
-    def call(self, target_file=None, origin_layer=None, destination_layer=None,
-             add_results=False, join_results=False, result_layer_name=None):
-        now_string = datetime.now().strftime(settings.DATETIME_FORMAT)
-
-        # update settings and save them
-        self.save()
-
-        # LAYERS
-        if origin_layer is None:
-            origin_layer = self.layer_list[
-                self.ui.origins_combo.currentIndex()]
-        if destination_layer is None:
-            destination_layer = self.layer_list[
-                self.ui.destinations_combo.currentIndex()]
-
-        if origin_layer==destination_layer:
-            msg_box = QMessageBox()
-            reply = msg_box.question(
-                self.ui,
-                'Hinweis',
-                'Die Layer mit Origins und Destinations sind identisch.\n'+
-                'Soll die Berechnung trotzdem gestartet werden?',
-                QMessageBox.Ok, QMessageBox.Cancel)
-            if reply == QMessageBox.Cancel:
-                return
-
-        working_dir = os.path.dirname(__file__)
-
-        # write config to temporary directory with additional meta infos
         tmp_dir = tempfile.mkdtemp()
-        config_xml = os.path.join(tmp_dir, 'config.xml')
-        meta = {
-            'date_of_calculation': now_string,
-            'user': getpass.getuser()
-        }
-        config.write(config_xml, hide_inactive=True, meta=meta)
-
         # convert layers to csv and write them to temporary directory
         orig_tmp_filename = os.path.join(tmp_dir, 'origins.csv')
         dest_tmp_filename = os.path.join(tmp_dir, 'destinations.csv')
-
-        wgs84 = QgsCoordinateReferenceSystem(4326)
-        non_geom_fields = get_non_geom_indices(origin_layer)
-        selected_only = (self.ui.selected_only_check.isChecked() and
-                         origin_layer.selectedFeatureCount() > 0)
+        target_file = os.path.join(tmp_dir, 'results.csv')
         QgsVectorFileWriter.writeAsVectorFormat(
             origin_layer,
             orig_tmp_filename,
             "utf-8",
             wgs84,
             "CSV",
-            onlySelected=selected_only,
-            attributes=non_geom_fields,
+            attributes=[o_fid_idx],
             layerOptions=["GEOMETRY=AS_YX"])
 
-        non_geom_fields = get_non_geom_indices(destination_layer)
-        selected_only = (self.ui.selected_only_check.isChecked() and
-                         destination_layer.selectedFeatureCount() > 0)
         QgsVectorFileWriter.writeAsVectorFormat(
             destination_layer,
             dest_tmp_filename,
             "utf-8",
             wgs84,
             "CSV",
-            onlySelected=selected_only,
-            attributes=non_geom_fields,
+            attributes=[d_fid_idx],
             layerOptions=["GEOMETRY=AS_YX"])
 
-        print('wrote origins and destinations to temporary folder "{}"'.format(
-            tmp_dir))
+        config_xml = os.path.join(tmp_dir, 'config.xml')
+        config = OTPConfig(filename=config_xml)
+        config.settings['system']['n_threads'] = settings.system['n_threads']
+        config.settings['origin']['id_field'] = 'fid'
+        config.settings['destination']['id_field'] = 'fid'
+        config.settings['post_processing']['details'] = True
 
-        if target_file is not None:
-            # copy config to file with similar name as results file
-            dst_config = os.path.splitext(target_file)[0] + '-config.xml'
-            shutil.copy(config_xml, dst_config)
-        else:
-            target_file = os.path.join(tmp_dir, 'results.csv')
+        router_config = config.settings['router_config']
+        buffered_dist = self.project_settings.max_walk_dist + 500
+        router_config['path'] = settings.graph_path
+        router_config['router'] = self.project_settings.router
+        router_config['max_walk_distance'] = buffered_dist
+        router_config['traverse_modes'] = 'WALK'
+        router_config['walk_speed'] = self.project_settings.walk_speed
+        router_config['max_time_min'] = math.ceil(
+            buffered_dist / self.project_settings.walk_speed / 60)
+        config.write()
 
-        target_path = os.path.dirname(target_file)
+        working_dir = os.path.join(settings.BASE_PATH, 'batch')
 
-        if not os.path.exists(target_path):
-            msg_box = QMessageBox(
-                QMessageBox.Warning, "Fehler",
-                u'Sie haben keinen gültigen Dateipfad angegeben.')
-            msg_box.exec_()
-            return
-        elif not os.access(target_path, os.W_OK):
-            msg_box = QMessageBox(
-                QMessageBox.Warning, "Fehler",
-                u'Sie benötigen Schreibrechte im Dateipfad {}!'
-                .format(target_path))
-            msg_box.exec_()
-            return
-
-        otp_jar=self.ui.otp_jar_edit.text()
-        if not os.path.exists(otp_jar):
-            msg_box = QMessageBox(
-                QMessageBox.Warning, "Fehler",
-                u'Die angegebene OTP Datei existiert nicht!')
-            msg_box.exec_()
-            return
-        jython_jar=self.ui.jython_edit.text()
-        if not os.path.exists(jython_jar):
-            msg_box = QMessageBox(
-                QMessageBox.Warning, "Fehler",
-                u'Der angegebene Jython Interpreter existiert nicht!')
-            msg_box.exec_()
-            return
-        java_executable = self.ui.java_edit.text()
-        memory = self.ui.memory_edit.value()
-        if not os.path.exists(java_executable):
-            msg_box = QMessageBox(
-                QMessageBox.Warning, "Fehler",
-                u'Der angegebene Java-Pfad existiert nicht!')
-            msg_box.exec_()
-            return
-        # ToDo: add parameter after java, causes errors atm
-        # basic cmd is same for all evaluations
-        cmd = '''"{java_executable}" -Xmx{ram_GB}G -jar "{jython_jar}"
-        -Dpython.path="{otp_jar}"
-        {wd}/otp_batch.py
-        --config "{config_xml}"
-        --origins "{origins}" --destinations "{destinations}"
-        --target "{target}" --nlines {nlines}'''
-
-        cmd = cmd.format(
-            java_executable=java_executable,
-            jython_jar=jython_jar,
-            otp_jar=otp_jar,
-            wd=working_dir,
-            ram_GB=memory,
-            config_xml = config_xml,
-            origins=orig_tmp_filename,
-            destinations=dest_tmp_filename,
-            target=target_file,
-            nlines=PRINT_EVERY_N_LINES
-        )
-
-        times = config.settings['time']
-        arrive_by = times['arrive_by']
-        if arrive_by == True or arrive_by == 'True':
-            n_points = destination_layer.featureCount()
-        else:
-            n_points = origin_layer.featureCount()
-
-        time_batch = times['time_batch']
-        batch_active = time_batch['active']
-        if batch_active == 'True' or batch_active == True:
-            dt_begin = datetime.strptime(times['datetime'], DATETIME_FORMAT)
-            dt_end = datetime.strptime(time_batch['datetime_end'],
-                                       DATETIME_FORMAT)
-            n_iterations = ((dt_end - dt_begin).total_seconds() /
-                            (int(time_batch['time_step']) * 60) + 1)
-        else:
-            n_iterations = 1
+        cmd = (f'"{java_executable}" -Xmx{memory}G -jar "{jython_jar}" '
+               f'-Dpython.path="{otp_jar}" '
+               f'{working_dir}/otp_batch.py '
+               f'--config "{config_xml}" '
+               f'--origins "{orig_tmp_filename}" --destinations "{dest_tmp_filename}" '
+               f'--target "{target_file}" --nlines {PRINT_EVERY_N_LINES}'
+               )
 
         diag = ExecOTPDialog(cmd,
                              parent=self.ui,
-                             auto_start=True,
-                             n_points=n_points,
-                             n_iterations=n_iterations,
-                             points_per_tick=PRINT_EVERY_N_LINES)
-        diag.exec_()
+                             n_points=origin_layer.featureCount(),
+                             points_per_tick=PRINT_EVERY_N_LINES,
+                             on_success=lambda x: self.analyse(target_file),
+                             auto_close=True, hide_auto_close=True)
+        diag.show()
 
-        # not successful or no need to add layers to QGIS ->
-        # just remove temporary files
-        if not diag.success or (not add_results and not join_results):
-            shutil.rmtree(tmp_dir)
-            return
-
-        ### add/join layers in QGIS after OTP is done ###
-
-        if result_layer_name is None:
-            result_layer_name = 'results-{}-{}'.format(
-                self.ui.router_combo.currentText(),
-                self.ui.origins_combo.currentText())
-            result_layer_name += '-' + now_string
-        # WARNING: csv layer is only link to file,
-        # if temporary is removed you won't see anything later
-        #result_layer = self.iface.addVectorLayer(target_file,
-                                                 #result_layer_name,
-                                                 #'delimitedtext')
-        uri = 'file:///' + target_file + '?type=csv&delimiter=;'
-        result_layer = QgsVectorLayer(uri, result_layer_name, 'delimitedtext')
-        QgsProject.instance().addMapLayer(result_layer)
-
-        if join_results:
-            join = QgsVectorLayerJoinInfo()
-            join.setJoinLayerId(result_layer.id())
-            join.setJoinFieldName('origin id')
-            join.setTargetFieldName(config.settings['origin']['id_field'])
-            join.setUsingMemoryCache(True)
-            join.setJoinLayer(result_layer)
-            origin_layer.addJoin(join)
+    def analyse(self, target_file):
+        pass
 
     def create_router(self):
         java_executable = settings.system['java']
@@ -720,16 +582,16 @@ class OTPMainWindow(QtCore.QObject):
         '''
         remove all project-related layers and try to close all workspaces
         '''
-        qgisproject = QgsProject.instance()
-        layer_root = qgisproject.layerTreeRoot()
-        # remove all project layers from layer tree
-        for project in self.project_manager.projects:
-            group = layer_root.findGroup(project.groupname)
-            if group:
-                for layer in group.findLayers():
-                    qgisproject.removeMapLayer(layer.layerId())
-                group.removeAllChildren()
-                layer_root.removeChildNode(group)
+        #qgisproject = QgsProject.instance()
+        #layer_root = qgisproject.layerTreeRoot()
+        ## remove all project layers from layer tree
+        #for project in self.project_manager.projects:
+            #group = layer_root.findGroup(project.groupname)
+            #if group:
+                #for layer in group.findLayers():
+                    #qgisproject.removeMapLayer(layer.layerId())
+                #group.removeAllChildren()
+                #layer_root.removeChildNode(group)
         for ws in Workspace.get_instances():
             if not ws.database.read_only:
                 ws.close()
@@ -740,39 +602,3 @@ class OTPMainWindow(QtCore.QObject):
         show the widget inside QGIS
         '''
         self.ui.show()
-
-
-def get_geometry_fields(layer):
-    '''return the names of the geometry fields of a given layer'''
-    geoms = []
-    for field in layer.fields():
-        if field.typeName() == 'geometry':
-            geoms.append(field.name())
-    return geoms
-
-def get_non_geom_indices(layer):
-    '''return the indices of all fields of a given layer except the geometry fields'''
-    indices = []
-    for i, field in enumerate(layer.fields()):
-        if field.typeName() != 'geometry':
-            indices.append(i)
-    return indices
-
-def csv_remove_columns(csv_filename, columns):
-    '''remove the given columns from a csv file with header'''
-    tmp_fn = csv_filename + 'tmp'
-    os.rename(csv_filename, tmp_fn)
-    with open(csv_filename, 'a') as csv_file, open(tmp_fn, 'r') as tmp_csv_file:
-        reader = csv.DictReader(tmp_csv_file)
-        fieldnames = reader.fieldnames[:]
-        for column in columns:
-            if column in fieldnames:
-                fieldnames.remove(column)
-        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in reader:
-            for column in columns:
-                del row[column]
-            writer.writerow(row)
-
-    os.remove(tmp_fn)

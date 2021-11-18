@@ -9,7 +9,7 @@ from sys import platform
 from shutil import move
 import re
 
-from gruenflaechenotp.base.dialogs import Dialog
+from gruenflaechenotp.base.dialogs import Dialog, ProgressDialog
 from gruenflaechenotp.base.project import settings, ProjectManager
 
 XML_FILTER = u'XML-Dateien (*.xml)'
@@ -312,64 +312,7 @@ class ImportLayerDialog(Dialog):
         return False, None, None, None
 
 
-class BatchProgressDialog(QtWidgets.QDialog, PROGRESS_FORM_CLASS):
-    """
-    Dialog showing progress in textfield and bar after starting a certain task with run()
-    """
-    def __init__(self, parent=None, auto_close=False):
-        super().__init__(parent=parent)
-        self.parent = parent
-        self.setupUi(self)
-        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
-        self.progress_bar.setStyleSheet(DEFAULT_STYLE)
-        self.progress_bar.setValue(0)
-        self.cancelButton.clicked.connect(self.close)
-        self.startButton.clicked.connect(self.run)
-        self.auto_close = auto_close
-
-        self.timer = QtCore.QTimer(self)
-        self.timer.timeout.connect(self.update_timer)
-
-
-    def running(self):
-        self.startButton.setEnabled(False)
-        self.cancelButton.setText('Stoppen')
-        self.cancelButton.clicked.disconnect(self.close)
-
-    def stopped(self):
-        self.timer.stop()
-        self.startButton.setEnabled(True)
-        self.cancelButton.setText('Beenden')
-        self.cancelButton.clicked.connect(self.close)
-        if self.auto_close:
-            self.close()
-
-    def show_status(self, text, progress=None):
-        #if hasattr(text, 'toLocal8Bit'):
-            #text = str(text.toLocal8Bit())
-        #else:
-            #text = _fromUtf8(text)
-        self.log_edit.insertHtml(text + '<br>')
-        self.log_edit.moveCursor(QtGui.QTextCursor.End)
-        if progress:
-            if isinstance(progress, QtCore.QVariant):
-                progress = progress.toInt()[0]
-            self.progress_bar.setValue(progress)
-
-    # task needs to be overridden
-    def run(self):
-        self.start_time = datetime.datetime.now()
-        self.timer.start(1000)
-
-    def update_timer(self):
-        delta = datetime.datetime.now() - self.start_time
-        h, remainder = divmod(delta.seconds, 3600)
-        m, s = divmod(remainder, 60)
-        timer_text = '{:02d}:{:02d}:{:02d}'.format(h, m, s)
-        self.elapsed_time_label.setText(timer_text)
-
-
-class ExecOTPDialog(BatchProgressDialog):
+class ExecOTPDialog(ProgressDialog):
     """
     ProgressDialog extented by an executable external process
 
@@ -379,33 +322,25 @@ class ExecOTPDialog(BatchProgressDialog):
     n_points: number of points to calculate in one iteration
     points_per_tick: how many points are calculated before showing progress
     """
-    def __init__(self, command, parent=None, auto_close=False, auto_start=False, n_iterations=1, n_points=0, points_per_tick=50):
-        super().__init__(parent=parent, auto_close=auto_close)
+    def __init__(self, command, n_points=0, points_per_tick=50,
+                 **kwargs):
+        super().__init__(None, **kwargs)
 
         # QProcess object for external app
         self.process = QtCore.QProcess(self)
-        self.auto_close = auto_close
         self.command = command
-        self.start_time = 0
 
         self.success = False
 
-        # aux. variable to determine if process was killed, because exit code of killed process can't be distinguished from normal exit in linux
-        self.killed = False
-
         self.ticks = 0.
-        self.iterations = 0
 
         # Just to prevent accidentally running multiple times
         # Disable the button when process starts, and enable it when it finishes
-        self.process.started.connect(self.running)
-        self.process.finished.connect(self.finished)
+        self.process.finished.connect(self._finished)
 
         # how often will the stdout-indicator written before reaching 100%
         n_ticks = float(n_points) / points_per_tick
-        n_ticks *= n_iterations
         tick_indicator = 'Processing:'
-        iteration_finished_indicator = 'A total of'
 
         # leave some space for post processing
         max_progress = 98.
@@ -420,52 +355,14 @@ class ExecOTPDialog(BatchProgressDialog):
                 if tick_indicator in out and n_ticks:
                     self.ticks += max_progress / n_ticks
                     self.progress_bar.setValue(min(max_progress, int(self.ticks)))
-                elif iteration_finished_indicator in out:
-                    self.iterations += 1
-                    self.progress_bar.setValue(self.iterations * max_progress / n_iterations)
-
-                '''  this approach shows progress more accurately, but may cause extreme lags -> deactivated (alternative: thread this)
-                if out.startswith(progress_indicator):
-                    # sometimes the stdout comes in too fast, you have to split it (don't split other than progress messages, warnings tend to be very long with multiple breaks, bad performance)
-                    for out_split in out.split("\n"):
-                        if (len(out_split) == 0):
-                            continue
-                        self.show_status(out_split)
-                        if(total_ticks and out_split.startswith(progress_indicator)):
-                            self.ticks += 100. / total_ticks
-                            self.progress_bar.setValue(min(100, int(self.ticks)))
-                else:
-                    self.show_status(out)
-                '''
-            if len(err): self.show_status(err)
+            if len(err):
+                self.on_error(err)
 
         self.process.readyReadStandardOutput.connect(show_progress)
         self.process.readyReadStandardError.connect(show_progress)
         def error(sth):
             self.kill()
         self.process.errorOccurred.connect(error)
-        if auto_start:
-            self.startButton.clicked.emit(True)
-
-    def running(self):
-        self.cancelButton.clicked.connect(self.kill)
-        super().running()
-
-    def stopped(self):
-        self.cancelButton.clicked.disconnect(self.kill)
-        super().stopped()
-
-    def finished(self):
-        self.startButton.setText('Neustart')
-        self.timer.stop()
-        if self.process.exitCode() == QtCore.QProcess.NormalExit and not self.killed:
-            self.progress_bar.setValue(100)
-            self.progress_bar.setStyleSheet(FINISHED_STYLE)
-            self.success = True
-        else:
-            self.progress_bar.setStyleSheet(ABORTED_STYLE)
-            self.success = False
-        self.stopped()
 
     def kill(self):
         self.timer.stop()
@@ -476,17 +373,17 @@ class ExecOTPDialog(BatchProgressDialog):
         self.success = False
 
     def run(self):
-        self.killed = False
+        super().run()
         self.ticks = 0
-        self.progress_bar.setStyleSheet(DEFAULT_STYLE)
-        self.progress_bar.setValue(0)
         self.show_status('<br>Starte Script: <i>' + self.command + '</i><br>')
         self.process.start(self.command)
-        self.start_time = datetime.datetime.now()
-        self.timer.start(1000)
+
+    def stop(self):
+        self.process.kill()
+        super().stop()
 
 
-class ExecCreateRouterDialog(BatchProgressDialog):
+class ExecCreateRouterDialog(ProgressDialog):
     def __init__(self, source_folder, target_folder,
                  java_executable, otp_jar, memory=2,
                  parent=None):

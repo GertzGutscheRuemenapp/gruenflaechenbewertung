@@ -1,7 +1,7 @@
 import shutil
 from qgis.core import (QgsCoordinateTransform, QgsGeometry,
                        QgsCoordinateReferenceSystem, QgsProject)
-from qgis.PyQt.QtCore import QVariant
+from qgis.PyQt.QtCore import QVariant, QProcess
 
 from gruenflaechenotp.base.worker import Worker
 from gruenflaechenotp.base.project import ProjectManager, settings
@@ -109,7 +109,3 @@ class ResetLayers(Worker):
                 attrs = dict((f.name, feat[f.name]) for f in fields)
                 table.add(geom=feat.geom, **attrs)
             self.set_progress((i+1) / len(self.tables) * 100)
-
-
-
-
