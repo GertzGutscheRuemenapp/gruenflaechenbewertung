@@ -452,13 +452,10 @@ class ProjectTable:
         FileNotFoundError
             table not found (create == False)
         '''
-        project = project or ProjectManager().active_project
         #Database = getattr(cls.Meta, 'database', Geopackage)
-        workspace_name = getattr(cls.Meta, 'workspace', 'default')
         table_name = cls.get_name()
         geometry_type = getattr(cls.Meta, 'geom', None)
-        database = project.data
-        workspace = database.get_or_create_workspace(workspace_name)
+        workspace = cls.get_workspace(project=project)
         try:
             fields, defaults = cls._fields()
             table = workspace.get_table(table_name, field_names=fields.keys())
@@ -475,12 +472,17 @@ class ProjectTable:
         return table
 
     @classmethod
-    def as_layer(cls, project: Project = None) -> QgsVectorLayer:
+    def get_workspace(cls, project=None):
         project = project or ProjectManager().active_project
-        database = project.data
-        table_name = cls.get_name()
         workspace_name = getattr(cls.Meta, 'workspace', 'default')
+        database = project.data
         workspace = database.get_or_create_workspace(workspace_name)
+        return workspace
+
+    @classmethod
+    def as_layer(cls, project: Project = None) -> QgsVectorLayer:
+        workspace = cls.get_workspace(project=project)
+        table_name = cls.get_name()
         data_path = f'{workspace.path}|layername={table_name}'
         layer = QgsVectorLayer(data_path, table_name, "ogr")
         # workaround: QGIS does not recognize SRS set in OGR source anymore
@@ -495,6 +497,12 @@ class ProjectTable:
     @classmethod
     def get_name(cls):
         return getattr(cls.Meta, 'name', cls.__name__.lower())
+
+    @classmethod
+    def remove(cls, project: Project = None):
+        workspace = cls.get_workspace(project=project)
+        table_name = cls.get_name()
+        workspace.remove_table(table_name)
 
     @classmethod
     def features(cls, project: Project = None, create: bool = False

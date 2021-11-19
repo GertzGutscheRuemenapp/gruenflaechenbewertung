@@ -11,17 +11,15 @@ from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, RouterDialog, InfoDial
                                            SettingsDialog, NewProjectDialog,
                                            ImportLayerDialog)
 from gruenflaechenotp.base.database import Workspace
-from gruenflaechenotp.tool.tables import (ProjectSettings, Projektgebiet,
-                                          Adressen, Baubloecke, Gruenflaechen,
-                                          GruenflaechenEingaenge)
+from gruenflaechenotp.tool.tables import (
+    ProjectSettings, Projektgebiet, Adressen, Baubloecke, Gruenflaechen,
+    GruenflaechenEingaenge, AdressenProcessed, GruenflaechenEingaengeProcessed)
 from gruenflaechenotp.base.dialogs import ProgressDialog
 from gruenflaechenotp.tool.jobs import (CloneProject, ImportLayer, ResetLayers,
-                                        AnalyseRouting, PrepareRouting, Routing)
+                                        AnalyseRouting, PrepareRouting)
 from gruenflaechenotp.batch.config import Config as OTPConfig
-import processing
 
 import tempfile
-import pandas as pd
 import webbrowser
 
 TITLE = "Grünflächenbewertung"
@@ -120,7 +118,7 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.reset_addresses_button.clicked.connect(
             lambda: self.reset_layer(Adressen))
 
-        self.ui.start_calculation_button.clicked.connect(self.prepare_routing)
+        self.ui.start_calculation_button.clicked.connect(self.calculate)
         # router
         self.setup_projects()
 
@@ -434,35 +432,7 @@ class OTPMainWindow(QtCore.QObject):
             self.project_settings.router = self.ui.router_combo.currentText()
             self.project_settings.save()
 
-    def prepare_routing(self):
-        #job = Routing(parent=self.ui)
-        #def on_success(result):
-            #origin_layer, destination_layer = result
-            #self.route(origin_layer, destination_layer)
-        #dialog = ProgressDialog(job, on_success=on_success, auto_close=True,
-                                #parent=self.ui)
-        #dialog.show()
-
-        job = PrepareRouting(parent=self.ui)
-        # workaround for not being able to run process together with
-        # preparation and analysis in one Thread (and therefore in one dialog)
-        # keeping track of elapsed time and log to hide this
-        dialog = None
-        self.elapsed_time = 0
-        self.progress_log = []
-        def on_close():
-            if dialog.success:
-                self.elapsed_time = dialog.elapsed_time
-                self.elapsed = 4600
-                self.progress_log = dialog.logs
-                origin_layer, destination_layer = dialog.result
-                self.route(origin_layer, destination_layer)
-        dialog = ProgressDialog(job, on_close=on_close, auto_close=True,
-                                title='Vorbereitung',
-                                hide_auto_close=True, parent=self.ui)
-        dialog.show()
-
-    def route(self, origin_layer, destination_layer):
+    def calculate(self):
         otp_jar = settings.system['otp_jar_file']
         if not os.path.exists(otp_jar):
             msg_box = QtWidgets.QMessageBox(
@@ -478,17 +448,42 @@ class OTPMainWindow(QtCore.QObject):
             msg_box.exec_()
             return
         java_executable = settings.system['java']
-        memory = settings.system['reserved']
         if not os.path.exists(java_executable):
             msg_box = QtWidgets.QMessageBox(
                 QtWidgets.QMessageBox.Warning, "Fehler",
                 u'Der angegebene Java-Pfad existiert nicht!')
             msg_box.exec_()
             return
+        self.prepare_routing()
+
+    def prepare_routing(self):
+        job = PrepareRouting(parent=self.ui)
+        # workaround for not being able to run process together with
+        # preparation and analysis in one Thread (and therefore in one dialog)
+        # keeping track of elapsed time and log to hide this
+        dialog = None
+        self.elapsed_time = 0
+        self.progress_log = []
+        def on_close():
+            if dialog.success:
+                self.elapsed_time = dialog.elapsed_time
+                self.progress_log = dialog.logs
+                self.route()
+        dialog = ProgressDialog(job, on_close=on_close, auto_close=True,
+                                title='Vorbereitung',
+                                hide_auto_close=True, parent=self.ui)
+        dialog.show()
+
+    def route(self):
+        return
+        otp_jar = settings.system['otp_jar_file']
+        jython_jar = settings.system['jython_jar_file']
+        java_executable = settings.system['java']
+        memory = settings.system['reserved']
 
         self.add_input_layers() # reload to make sure they are there
-        entrance_layer = self.green_entrances_output.layer
-        address_layer = self.addr_output.layer
+        origin_layer = GruenflaechenEingaengeProcessed.as_layer()
+        destination_layer = AdressenProcessed.as_layer()
         wgs84 = QgsCoordinateReferenceSystem(4326)
 
         tmp_dir = tempfile.mkdtemp()

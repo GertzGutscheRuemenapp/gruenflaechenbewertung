@@ -53,3 +53,31 @@ class GruenflaechenEingaenge(ProjectTable):
     class Meta:
         workspace = 'project'
         geom = 'Point'
+
+
+class AdressenProcessed(ProjectTable):
+    adresse = Field(int, 0)
+    baublock = Field(int, 0)
+
+    class Meta:
+        workspace = 'results'
+        geom = 'Point'
+
+
+class GruenflaechenEingaengeProcessed(ProjectTable):
+    eingang = Field(int, 0)
+    gruenflaeche = Field(int, 0)
+
+    class Meta:
+        workspace = 'results'
+        geom = 'Point'
+
+
+class ProjektgebietProcessed(ProjectTable):
+
+    class Meta:
+        workspace = 'results'
+        geom = 'Point'
+
+
+

@@ -1,21 +1,18 @@
 import shutil
-import math
-import os
 from qgis.core import (QgsCoordinateTransform, QgsGeometry, QgsSpatialIndex,
-                       QgsCoordinateReferenceSystem, QgsProject,
-                       QgsVectorFileWriter)
+                       QgsCoordinateReferenceSystem, QgsProject)
 from qgis.PyQt.QtCore import QVariant, QProcess
 import pandas as pd
 import numpy as np
-import tempfile
-import time
+import processing
 
 from gruenflaechenotp.base.worker import Worker
 from gruenflaechenotp.base.project import ProjectManager, settings
-from gruenflaechenotp.batch.config import Config as OTPConfig
 from gruenflaechenotp.tool.tables import (GruenflaechenEingaenge, Projektgebiet,
-                                          Adressen, Baubloecke, ProjectSettings)
-from gruenflaechenotp.tool.dialogs import ExecOTPDialog
+                                          AdressenProcessed, Baubloecke,
+                                          ProjectSettings, Adressen,
+                                          ProjektgebietProcessed, Gruenflaechen,
+                                          GruenflaechenEingaengeProcessed)
 from gruenflaechenotp.base.spatial import intersect, create_layer
 
 
@@ -151,7 +148,7 @@ class AnalyseRouting(Worker):
 
     def work(self):
         self.log('')
-        self.log('<br><b>Analyse der Ergebnisse</b><br>')
+        self.log('<br><b>Analyse der Ergebnisse des Routings</b><br>')
         project_settings = ProjectSettings.features()[0]
         # for some reason pandas automatically replaces underscores in header
         # with spaces, no possibility to turn that off
@@ -164,11 +161,121 @@ class AnalyseRouting(Worker):
                      'walk/bike distance (m)': 'distance'}
         )
 
+        self.set_progress(60)
+
+        self.log('Analysiere Grünflächennutzung...')
+        df_merged = df_results.merge(df_addr_blocks, how='left', on='address_id')
+        df_merged = df_merged.merge(df_entrances, how='left', on='entrance_id')
+        df_merged = df_merged[df_merged['block_id'].notna() &
+                              df_merged['green_id'].notna()]
+        print()
+
+
+
+class PrepareRouting(Worker):
+    def work(self):
+        self.log('<b>Vorbereitung des Routings</b><br>')
+        project_settings = ProjectSettings.features()[0]
+        project_layer = Projektgebiet.as_layer()
+        entrances_layer = GruenflaechenEingaenge.as_layer()
+        address_layer = Adressen.as_layer()
+        block_layer = Baubloecke.as_layer()
+        green_spaces_layer = Gruenflaechen.as_layer()
+        AdressenProcessed.remove()
+        GruenflaechenEingaengeProcessed.remove()
+
+        buffer = project_settings.project_buffer
+        # ToDo:buffer
+        # a.geom.buffer(project_settings.project_buffer, 10)
+        self.log('Verschneide Adressen und Grünflächeingänge '
+                 f'mit dem Projektgebiet inkl. Buffer ({buffer}m) ')
+
+        parameters = {'INPUT': address_layer,
+                      'INPUT_FIELDS': ['fid'],
+                      'OVERLAY': project_layer,
+                      'OUTPUT':'memory:'}
+        addr_in_pa_layer = processing.run(
+            'native:intersection', parameters)['OUTPUT']
+
+        parameters = {'INPUT': entrances_layer,
+                      'OVERLAY': project_layer,
+                      'OVERLAY_FIELDS_PREFIX': 'green_',
+                      'OUTPUT':'memory:'}
+        ent_in_pa_layer = processing.run(
+            'native:intersection', parameters)['OUTPUT']
+        self.set_progress(15)
+
+        self.log('Ordne Adressen den Baublöcken zu...')
+
+        parameters = {'INPUT': addr_in_pa_layer,
+                      'INPUT_FIELDS': ['fid'],
+                      'OVERLAY': block_layer,
+                      'OVERLAY_FIELDS_PREFIX': 'block_',
+                      'OUTPUT':'memory:'}
+
+        addr_block_layer = processing.run(
+            'native:intersection', parameters)['OUTPUT']
+        self.set_progress(30)
+
+        proc_addresses = AdressenProcessed.features(create=True)
+        for feat in addr_block_layer.getFeatures():
+            # intersection turns the points into multipoints whyever
+            geom = feat.geometry().asGeometryCollection()[0]
+            proc_addresses.add(adresse=feat.attribute('fid'), geom=geom,
+                               baublock=feat.attribute('block_fid'))
+
+        missing = (addr_in_pa_layer.featureCount() -
+                   addr_block_layer.featureCount())
+        if missing:
+            self.log(f'{missing} Adressen konnten keinem Baublock '
+                     'zugeordnet werden.', warning=True)
+        self.set_progress(70)
+
+        self.log('Ordne Eingänge den Grünflächen zu...')
+
+        green_index = QgsSpatialIndex()
+        for feat in green_spaces_layer.getFeatures():
+            green_index.insertFeature(feat)
+        missing = 0
+        max_ent_dist = 100
+        proc_entrances = GruenflaechenEingaengeProcessed.features(create=True)
+        for feat in ent_in_pa_layer.getFeatures():
+            # multipoint to point
+            geom = feat.geometry().asGeometryCollection()[0]
+            nearest = green_index.nearestNeighbor(geom, 1,
+                                                  maxDistance=max_ent_dist)
+            if nearest:
+                proc_entrances.add(eingang=feat.attribute('fid'), geom=geom,
+                                   green_id=nearest[0])
+            else:
+                missing += 1
+        if missing:
+            self.log(f'{missing} Eingänge konnten im Umkreis von '
+                     f'{max_ent_dist}m keiner Grünfläche zugeordnet werden.',
+                     warning=True)
+
+
+        return
+        parameters = {'INPUT': entrances_layer,
+                      'OVERLAY': project_layer,
+                      'OVERLAY_FIELDS': [],
+                      'OUTPUT':'memory:'}
+        o_clipped = processing.run(
+            'native:intersection', parameters)['OUTPUT']
+
+        project_layer = self.project_area_output.layer
+        parameters = {'INPUT': address_layer,
+                      'OVERLAY': project_layer,
+                      'OVERLAY_FIELDS': [],
+                      'OUTPUT':'memory:'}
+        d_clipped = processing.run(
+            'native:intersection', parameters)['OUTPUT']
+
         self.log('Ordne Adressen den Baublöcken zu...')
         df_results = df_results[df_results['distance'] <=
                                 project_settings.max_walk_dist]
         addresses = Adressen.features()
-        intersection = intersect(Adressen.features(),
+        intersection = intersect(addresses,
                                  Baubloecke.features(),
                                  input_fields={'id': 'address_id'},
                                  output_fields={'id': 'block_id',
@@ -216,40 +323,6 @@ class AnalyseRouting(Worker):
             self.log(f'{missing} Eingänge konnten im Umkreis von '
                      f'{max_ent_dist}m keiner Grünfläche zugeordnet werden.',
                      warning=True)
-        self.set_progress(60)
 
-        self.log('Analysiere Grünflächennutzung...')
-        df_merged = df_results.merge(df_addr_blocks, how='left', on='address_id')
-        df_merged = df_merged.merge(df_entrances, how='left', on='entrance_id')
-        df_merged = df_merged[df_merged['block_id'].notna() &
-                              df_merged['green_id'].notna()]
-        print()
+        self.log('Schreibe Zwischenergebnisse...')
 
-
-
-class PrepareRouting(Worker):
-    def work(self):
-        self.log('<b>Vorbereitung des Routings</b><br>')
-        origin_layer = GruenflaechenEingaenge.as_layer()
-        destination_layer = Adressen.as_layer()
-        project_layer = Projektgebiet.as_layer()
-        #origin_layer = ProjectLayer.from_table(Adressen.get_table())
-        #project_layer = create_layer(Projektgebiet.features(),
-                                     #Projektgebiet.Meta.geom)
-        #destination_layer = create_layer(Adressen.features(),
-                                         #Adressen.Meta.geom)
-        #parameters = {'INPUT': origin_layer,
-                      #'OVERLAY': project_layer,
-                      #'OVERLAY_FIELDS': [],
-                      #'OUTPUT':'memory:'}
-        #o_clipped = processing.run(
-            #'native:clip', parameters)['OUTPUT']
-
-        #project_layer = self.project_area_output.layer
-        #parameters = {'INPUT': address_layer,
-                      #'OVERLAY': project_layer,
-                      #'OUTPUT':'memory:'}
-        #destination_layer = processing.run(
-            #'native:intersection', parameters)['OUTPUT']
-
-        return origin_layer, destination_layer

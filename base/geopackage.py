@@ -117,6 +117,10 @@ class GeopackageWorkspace(Workspace):
             cls.create(name, database)
         return GeopackageWorkspace(name, database)
 
+    def remove_table(self, name):
+        if self.conn.GetLayerByName(name):
+            self.conn.DeleteLayer(name)
+
     @classmethod
     def create(cls, name: str, database: Database,
                overwrite: bool = False) -> 'GeopackageWorkspace':
