@@ -329,9 +329,7 @@ class ExecOTPDialog(ProgressDialog):
         # QProcess object for external app
         self.process = QtCore.QProcess(self)
         self.command = command
-
         self.success = False
-
         self.ticks = 0.
 
         # Just to prevent accidentally running multiple times
@@ -358,25 +356,20 @@ class ExecOTPDialog(ProgressDialog):
         self.process.readyReadStandardOutput.connect(show_progress)
         self.process.readyReadStandardError.connect(show_progress)
         def error(sth):
-            self.kill()
+            self.error = True
         self.process.errorOccurred.connect(error)
-
-    def kill(self):
-        self.timer.stop()
-        self.killed = True
-        self.error = True
-        self.process.kill()
-        self.log_edit.insertHtml('<b> Vorgang abgebrochen </b> <br>')
-        self.log_edit.moveCursor(QtGui.QTextCursor.End)
 
     def run(self):
         super().run()
         self.ticks = 0
-        self.show_status('<br>Starte Script: <i>' + self.command + '</i><br>')
+        self.show_status('<br><b>Routing mit dem OpenTripPlanner</b><br>')
+        self.show_status('Script: <i>' + self.command + '</i>')
         self.process.start(self.command)
 
     def stop(self):
         self.process.kill()
+        self.error = True
+        self.success = False
         super().stop()
 
 

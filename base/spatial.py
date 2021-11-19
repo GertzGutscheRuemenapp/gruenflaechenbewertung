@@ -1,8 +1,7 @@
 import numpy as np
 from qgis.core import (QgsPointXY, QgsGeometry, QgsVectorLayer, QgsField,
                        QgsFeature, QgsPolygon, QgsCoordinateTransform,
-                       QgsProject, QgsCoordinateReferenceSystem, QgsPoint,
-                       QgsFeatureIterator)
+                       QgsProject, QgsCoordinateReferenceSystem, QgsPoint)
 from qgis.PyQt.QtCore import QVariant
 from osgeo import gdal, osr
 from typing import Union, Tuple, List
@@ -15,11 +14,6 @@ from .database import Table, Feature, FeatureCollection
 
 class Point(object):
     '''
-    A Point object with same interface as required in code taken from
-    ProjektCheck Profi for ArcGIS (doing some weird inplace transformations)
-
-    ToDo: replace this with QGIS geometries in code originating from
-    ArcGIS-version entirely
     '''
     def __init__(self, x: float, y: float, id: int = None, epsg: int = 4326):
         '''
@@ -148,7 +142,7 @@ def get_bbox(table: Table) -> Tuple[Point, Point]:
             Point(ex.xMaximum(), ex.yMaximum(), epsg=epsg))
     return bbox
 
-def create_layer(features: Union[List[QgsFeature], QgsFeatureIterator],
+def create_layer(features: Union[List[Feature], FeatureCollection],
                  geom_type: str, fields: List[str] = [],
                  rename = {}, name: str = 'temp',
                  epsg: int = 4326, target_epsg: int = None,
@@ -158,7 +152,7 @@ def create_layer(features: Union[List[QgsFeature], QgsFeatureIterator],
 
     Parameters
     ----------
-    features : QgsFeature or QgsFeatureIterator
+    features : list of Features or FeatureCollection
         features to put into new layer
     geom_type : str
         type of geometry e.g. Point, Polygon
@@ -217,8 +211,8 @@ def intersect(input_features: Union[List[Feature], FeatureCollection],
 
     Parameters
     ----------
-    input_features : list
-        list of QgsFeatures with Point geometry to be clipped
+    input_features : list of Features or FeatureCollection
+        list of features with Point geometry to be clipped
     overlay_features : list or layer
         list of QgsFeatures with Polygon geometry or layer with Polygon geometry
     input_fields : list, optional

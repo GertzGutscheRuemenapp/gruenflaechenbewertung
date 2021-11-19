@@ -22,18 +22,15 @@ __author__ = 'Christoph Franke'
 __date__ = '16/07/2019'
 
 import os
-from glob import glob
 import sys
 import json
 import shutil
 import sys
 from collections import OrderedDict
-from operator import itemgetter
 from typing import Tuple, List, Union
-from qgis.core import QgsVectorLayer, QgsLayerTreeGroup
+from qgis.core import (QgsVectorLayer, QgsLayerTreeGroup,
+                       QgsCoordinateReferenceSystem)
 
-from projektcheck.utils.singleton import Singleton
-from projektcheck.utils.connection import Request
 from .database import Field, Table, FeatureCollection, Workspace
 from .geopackage import Geopackage
 from .layers import Layer, TileLayer
@@ -70,6 +67,18 @@ DEFAULT_SETTINGS = {
 }
 
 
+class Singleton(type):
+    '''
+    singleton meta class
+    '''
+    _instances = {}
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = \
+                super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
 class Settings(metaclass=Singleton):
     BASE_PATH = BASE_PATH
     UI_PATH = os.path.join(BASE_PATH, 'ui')
@@ -96,7 +105,6 @@ class Settings(metaclass=Singleton):
         ----------
         filename : str, optional
             name of file in APPDATA path to store settings in
-            by default 'projektcheck-config.txt'
         '''
         self.defaults = defaults
         if not os.path.exists(APPDATA_PATH):
@@ -465,6 +473,20 @@ class ProjectTable:
             table = cls._create(table_name, workspace,
                                 geometry_type=geometry_type)
         return table
+
+    @classmethod
+    def as_layer(cls, project: Project = None) -> QgsVectorLayer:
+        project = project or ProjectManager().active_project
+        database = project.data
+        table_name = cls.get_name()
+        workspace_name = getattr(cls.Meta, 'workspace', 'default')
+        workspace = database.get_or_create_workspace(workspace_name)
+        data_path = f'{workspace.path}|layername={table_name}'
+        layer = QgsVectorLayer(data_path, table_name, "ogr")
+        # workaround: QGIS does not recognize SRS set in OGR source anymore
+        crs = QgsCoordinateReferenceSystem(f'epsg:{settings.EPSG}')
+        layer.setCrs(crs)
+        return layer
 
     @staticmethod
     def _where(kwargs):

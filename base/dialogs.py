@@ -71,8 +71,9 @@ class ProgressDialog(Dialog):
 
     def __init__(self, worker: Worker, parent: QObject = None,
                  auto_close: bool = False, auto_run: bool = True,
-                 hide_auto_close: bool = False, title=None,
-                 on_success: object = None, on_close: object = None):
+                 hide_auto_close: bool = False, title=None, start_elapsed=0,
+                 on_success: object = None, on_close: object = None,
+                 logs=[]):
         '''
         Parameters
         ----------
@@ -99,7 +100,10 @@ class ProgressDialog(Dialog):
         super().__init__(self.ui_file, title=title,
                          modal=True, parent=parent)
         self.parent = parent
+        self.logs = logs
+        self.elapsed_time = start_elapsed
         self.setupUi()
+        self.result = None
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.progress_bar.setValue(0)
         self.stop_button.setVisible(False)
@@ -128,6 +132,9 @@ class ProgressDialog(Dialog):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._update_timer)
 
+        for log in logs:
+            self.log_edit.appendHtml(log)
+
     def show(self):
         '''
         show the dialog
@@ -142,6 +149,7 @@ class ProgressDialog(Dialog):
         '''
         self.progress(100)
         self.show_status('<br><b>fertig</b>')
+        self.result = result
         if not self.error:
             self.success = True
             if self.on_success:
@@ -164,6 +172,8 @@ class ProgressDialog(Dialog):
         '''
         close the dialog
         '''
+        if self.worker and self.worker.isRunning:
+            self.worker.terminate()
         super().close()
         if self.on_close:
             self.on_close()
@@ -204,6 +214,7 @@ class ProgressDialog(Dialog):
             message to show
         '''
         self.log_edit.appendHtml(text)
+        self.logs.append(text)
         #self.log_edit.moveCursor(QTextCursor.Down)
         scrollbar = self.log_edit.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum());
@@ -225,7 +236,8 @@ class ProgressDialog(Dialog):
         '''
         start the timer
         '''
-        self.start_time = datetime.datetime.now()
+        self.start_time = (datetime.datetime.now() -
+                           datetime.timedelta(seconds=self.elapsed_time))
         self.timer.start(1000)
 
     def run(self):
@@ -248,7 +260,9 @@ class ProgressDialog(Dialog):
         self.timer.stop()
         if self.worker:
             self.worker.terminate()
-        self.log_edit.appendHtml('<b> Vorgang abgebrochen </b> <br>')
+        text = '<b> Vorgang abgebrochen </b> <br>'
+        self.log_edit.appendHtml(text)
+        self.logs.append(text)
         self.log_edit.moveCursor(QtGui.QTextCursor.End)
         self._finished()
 
@@ -257,7 +271,8 @@ class ProgressDialog(Dialog):
         update the timer
         '''
         delta = datetime.datetime.now() - self.start_time
-        h, remainder = divmod(delta.seconds, 3600)
+        self.elapsed_time = delta.seconds
+        h, remainder = divmod(self.elapsed_time, 3600)
         m, s = divmod(remainder, 60)
         timer_text = '{:02d}:{:02d}:{:02d}'.format(h, m, s)
         self.elapsed_time_label.setText(timer_text)

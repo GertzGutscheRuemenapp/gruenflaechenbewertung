@@ -16,8 +16,9 @@ from gruenflaechenotp.tool.tables import (ProjectSettings, Projektgebiet,
                                           GruenflaechenEingaenge)
 from gruenflaechenotp.base.dialogs import ProgressDialog
 from gruenflaechenotp.tool.jobs import (CloneProject, ImportLayer, ResetLayers,
-                                        AnalyseRouting)
+                                        AnalyseRouting, PrepareRouting, Routing)
 from gruenflaechenotp.batch.config import Config as OTPConfig
+import processing
 
 import tempfile
 import pandas as pd
@@ -119,7 +120,7 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.reset_addresses_button.clicked.connect(
             lambda: self.reset_layer(Adressen))
 
-        self.ui.start_calculation_button.clicked.connect(self.route)
+        self.ui.start_calculation_button.clicked.connect(self.prepare_routing)
         # router
         self.setup_projects()
 
@@ -182,7 +183,7 @@ class OTPMainWindow(QtCore.QObject):
             job = ImportLayer(table, layer, crs, fields=fields, parent=self.ui)
             dialog = ProgressDialog(
                 job, parent=self.ui,
-                on_success=lambda x: self.pa_output.draw(redraw=False))
+                on_success=lambda x: self.project_area_output.draw(redraw=False))
             dialog.show()
 
     def import_green_spaces(self):
@@ -383,13 +384,13 @@ class OTPMainWindow(QtCore.QObject):
             redraw=False)
 
         project_area = Projektgebiet.get_table(create=True)
-        self.pa_output = ProjectLayer.from_table(
+        self.project_area_output = ProjectLayer.from_table(
             project_area, groupname=groupname)
-        self.pa_output.draw(label='Projektgebiet',
+        self.project_area_output.draw(label='Projektgebiet',
             style_file='projektgebiet.qml',
             redraw=False)
 
-        self.pa_output.zoom_to()
+        self.project_area_output.zoom_to()
 
     def apply_project_settings(self, project):
         self.ui.required_green_edit.setValue(self.project_settings.required_green)
@@ -433,7 +434,35 @@ class OTPMainWindow(QtCore.QObject):
             self.project_settings.router = self.ui.router_combo.currentText()
             self.project_settings.save()
 
-    def route(self):
+    def prepare_routing(self):
+        #job = Routing(parent=self.ui)
+        #def on_success(result):
+            #origin_layer, destination_layer = result
+            #self.route(origin_layer, destination_layer)
+        #dialog = ProgressDialog(job, on_success=on_success, auto_close=True,
+                                #parent=self.ui)
+        #dialog.show()
+
+        job = PrepareRouting(parent=self.ui)
+        # workaround for not being able to run process together with
+        # preparation and analysis in one Thread (and therefore in one dialog)
+        # keeping track of elapsed time and log to hide this
+        dialog = None
+        self.elapsed_time = 0
+        self.progress_log = []
+        def on_close():
+            if dialog.success:
+                self.elapsed_time = dialog.elapsed_time
+                self.elapsed = 4600
+                self.progress_log = dialog.logs
+                origin_layer, destination_layer = dialog.result
+                self.route(origin_layer, destination_layer)
+        dialog = ProgressDialog(job, on_close=on_close, auto_close=True,
+                                title='Vorbereitung',
+                                hide_auto_close=True, parent=self.ui)
+        dialog.show()
+
+    def route(self, origin_layer, destination_layer):
         otp_jar = settings.system['otp_jar_file']
         if not os.path.exists(otp_jar):
             msg_box = QtWidgets.QMessageBox(
@@ -458,11 +487,8 @@ class OTPMainWindow(QtCore.QObject):
             return
 
         self.add_input_layers() # reload to make sure they are there
-        origin_layer = self.green_entrances_output.layer
-        destination_layer = self.addr_output.layer
-        o_fid_idx = [f.name() for f in origin_layer.fields()].index('fid')
-        d_fid_idx = [f.name() for f in destination_layer.fields()].index('fid')
-
+        entrance_layer = self.green_entrances_output.layer
+        address_layer = self.addr_output.layer
         wgs84 = QgsCoordinateReferenceSystem(4326)
 
         tmp_dir = tempfile.mkdtemp()
@@ -470,6 +496,10 @@ class OTPMainWindow(QtCore.QObject):
         orig_tmp_filename = os.path.join(tmp_dir, 'origins.csv')
         dest_tmp_filename = os.path.join(tmp_dir, 'destinations.csv')
         target_file = os.path.join(tmp_dir, 'results.csv')
+
+        o_fid_idx = [f.name() for f in origin_layer.fields()].index('fid')
+        d_fid_idx = [f.name() for f in destination_layer.fields()].index('fid')
+
         QgsVectorFileWriter.writeAsVectorFormat(
             origin_layer,
             orig_tmp_filename,
@@ -516,21 +546,30 @@ class OTPMainWindow(QtCore.QObject):
                f'--target "{target_file}" --nlines {PRINT_EVERY_N_LINES}'
                )
 
-        diag = ExecOTPDialog(cmd,
-                             parent=self.ui,
-                             n_points=origin_layer.featureCount(),
-                             points_per_tick=PRINT_EVERY_N_LINES,
-                             on_success=lambda x: self.analyse(target_file),
-                             auto_close=True, hide_auto_close=True)
-        diag.show()
+        dialog = None
+        # workaround
+        def on_close():
+            if dialog.success:
+                self.elapsed_time = dialog.elapsed_time
+                self.progress_log = dialog.logs
+                self.analyse(target_file)
+
+        dialog = ExecOTPDialog(cmd, parent=self.ui,
+                               start_elapsed=self.elapsed_time,
+                               logs=self.progress_log,
+                               n_points=origin_layer.featureCount(),
+                               points_per_tick=PRINT_EVERY_N_LINES,
+                               on_close=on_close,
+                               auto_close=True, hide_auto_close=True)
+        dialog.show()
 
     def analyse(self, target_file):
-        # for some reason pandas automatically replaces underscores in header
-        # with spaces, no possibility to turn that off
-
         job = AnalyseRouting(target_file, self.green_output.layer.getFeatures(),
                              parent=self.ui)
-        dialog = ProgressDialog(job, parent=self.ui)
+        dialog = ProgressDialog(job, parent=self.ui,
+                                start_elapsed=self.elapsed_time,
+                                logs=self.progress_log,
+                                title='Analyse')
         dialog.show()
 
     def create_router(self):

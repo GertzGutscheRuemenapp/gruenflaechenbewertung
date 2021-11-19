@@ -1,15 +1,22 @@
 import shutil
+import math
+import os
 from qgis.core import (QgsCoordinateTransform, QgsGeometry, QgsSpatialIndex,
-                       QgsCoordinateReferenceSystem, QgsProject)
-from qgis.PyQt.QtCore import QVariant
+                       QgsCoordinateReferenceSystem, QgsProject,
+                       QgsVectorFileWriter)
+from qgis.PyQt.QtCore import QVariant, QProcess
 import pandas as pd
 import numpy as np
+import tempfile
+import time
 
 from gruenflaechenotp.base.worker import Worker
 from gruenflaechenotp.base.project import ProjectManager, settings
-from gruenflaechenotp.tool.tables import (GruenflaechenEingaenge,
+from gruenflaechenotp.batch.config import Config as OTPConfig
+from gruenflaechenotp.tool.tables import (GruenflaechenEingaenge, Projektgebiet,
                                           Adressen, Baubloecke, ProjectSettings)
-from gruenflaechenotp.base.spatial import intersect
+from gruenflaechenotp.tool.dialogs import ExecOTPDialog
+from gruenflaechenotp.base.spatial import intersect, create_layer
 
 
 class CloneProject(Worker):
@@ -64,19 +71,37 @@ class ImportLayer(Worker):
 
         self.log('Importiere Features...')
         n_broken_geometries = 0
+        repaired = 0
         for feature in self.layer.getFeatures():
             geom = feature.geometry()
-            valid = geom.isGeosValid()
-            if valid:
-                geom = QgsGeometry(geom)
-                try:
-                    geom.transform(tr)
-                # infinite coordinates are considered valid but fail to transform
-                except:
-                    valid = False
-            if not valid:
-                geom = QgsGeometry()
+            if geom.isEmpty():
                 n_broken_geometries += 1
+            else:
+                error = False
+                if not geom.isGeosValid():
+                    error = True
+                    try:
+                        geom = geom.makeValid()
+                        geom.transform(tr)
+                    except:
+                        pass
+                    # still not valid -> add empty geometry instead
+                    if not geom.isGeosValid():
+                        geom = QgsGeometry()
+                    else:
+                        repaired += 1
+                else:
+                    geom = QgsGeometry(geom)
+                    # infinite coordinates are considered valid but fail to transform
+                    # -> add empty geometry
+                    try:
+                        geom.transform(tr)
+                    except:
+                        geom = QgsGeometry()
+                        error = True
+                if error:
+                    n_broken_geometries += 1
+
             attrs = {}
             for f_in, f_out in self.fields:
                 attr = feature.attribute(f_in)
@@ -86,11 +111,13 @@ class ImportLayer(Worker):
             self.table.add(geom=geom, **attrs)
 
         self.log(f'{self.layer.featureCount()} Features erfolgreich importiert')
-
-        if n_broken_geometries > 0:
-            self.log(f'{n_broken_geometries} Features haben keine oder defekte '
-                     'Geometrien. Sie wurden ohne Geometrie in das Projekt '
-                     'übernommen', warning=True)
+        not_repaired = n_broken_geometries - repaired
+        if n_broken_geometries:
+            self.log(f'{n_broken_geometries} Features hatten keine oder defekte '
+                     f'Geometrien. {repaired} davon konnten repariert werden.')
+        if not_repaired:
+            self.log(f'{not_repaired} Features wurde ohne Geometrie in das '
+                     'Projekt übernommen', warning=True)
 
 
 class ResetLayers(Worker):
@@ -123,8 +150,11 @@ class AnalyseRouting(Worker):
         self.green_spaces = green_spaces
 
     def work(self):
-        self.log('Lese Ergebnisse des Routings...')
+        self.log('')
+        self.log('<br><b>Analyse der Ergebnisse</b><br>')
         project_settings = ProjectSettings.features()[0]
+        # for some reason pandas automatically replaces underscores in header
+        # with spaces, no possibility to turn that off
         df_results = pd.read_csv(
             self.results_file, delimiter=';',
             usecols= ['origin id','destination id', 'walk/bike distance (m)'])
@@ -196,3 +226,30 @@ class AnalyseRouting(Worker):
         print()
 
 
+
+class PrepareRouting(Worker):
+    def work(self):
+        self.log('<b>Vorbereitung des Routings</b><br>')
+        origin_layer = GruenflaechenEingaenge.as_layer()
+        destination_layer = Adressen.as_layer()
+        project_layer = Projektgebiet.as_layer()
+        #origin_layer = ProjectLayer.from_table(Adressen.get_table())
+        #project_layer = create_layer(Projektgebiet.features(),
+                                     #Projektgebiet.Meta.geom)
+        #destination_layer = create_layer(Adressen.features(),
+                                         #Adressen.Meta.geom)
+        #parameters = {'INPUT': origin_layer,
+                      #'OVERLAY': project_layer,
+                      #'OVERLAY_FIELDS': [],
+                      #'OUTPUT':'memory:'}
+        #o_clipped = processing.run(
+            #'native:clip', parameters)['OUTPUT']
+
+        #project_layer = self.project_area_output.layer
+        #parameters = {'INPUT': address_layer,
+                      #'OVERLAY': project_layer,
+                      #'OUTPUT':'memory:'}
+        #destination_layer = processing.run(
+            #'native:intersection', parameters)['OUTPUT']
+
+        return origin_layer, destination_layer
