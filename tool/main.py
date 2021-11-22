@@ -13,7 +13,9 @@ from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, RouterDialog, InfoDial
 from gruenflaechenotp.base.database import Workspace
 from gruenflaechenotp.tool.tables import (
     ProjectSettings, Projektgebiet, Adressen, Baubloecke, Gruenflaechen,
-    GruenflaechenEingaenge, AdressenProcessed, GruenflaechenEingaengeProcessed)
+    GruenflaechenEingaenge, AdressenProcessed, GruenflaechenEingaengeProcessed,
+    BaublockErgebnisse
+)
 from gruenflaechenotp.base.dialogs import ProgressDialog
 from gruenflaechenotp.tool.jobs import (CloneProject, ImportLayer, ResetLayers,
                                         AnalyseRouting, PrepareRouting)
@@ -390,6 +392,17 @@ class OTPMainWindow(QtCore.QObject):
 
         self.project_area_output.zoom_to()
 
+    def add_result_layers(self):
+        groupname = 'Ergebnisse'
+
+        addresses = BaublockErgebnisse.get_table(create=True)
+        self.results_output = ProjectLayer.from_table(
+            addresses, groupname=groupname, prepend=True)
+        self.results_output.draw(
+            label='verfügbare Grünfläche je Einwohner je Baublock',
+            style_file='baublock_ergebnisse.qml',
+            redraw=False)
+
     def apply_project_settings(self, project):
         self.ui.required_green_edit.setValue(self.project_settings.required_green)
         self.ui.max_walk_dist_edit.setValue(self.project_settings.max_walk_dist)
@@ -475,7 +488,6 @@ class OTPMainWindow(QtCore.QObject):
         dialog.show()
 
     def route(self):
-        return
         otp_jar = settings.system['otp_jar_file']
         jython_jar = settings.system['jython_jar_file']
         java_executable = settings.system['java']
@@ -492,8 +504,8 @@ class OTPMainWindow(QtCore.QObject):
         dest_tmp_filename = os.path.join(tmp_dir, 'destinations.csv')
         target_file = os.path.join(tmp_dir, 'results.csv')
 
-        o_fid_idx = [f.name() for f in origin_layer.fields()].index('fid')
-        d_fid_idx = [f.name() for f in destination_layer.fields()].index('fid')
+        o_fid_idx = [f.name() for f in origin_layer.fields()].index('eingang')
+        d_fid_idx = [f.name() for f in destination_layer.fields()].index('adresse')
 
         QgsVectorFileWriter.writeAsVectorFormat(
             origin_layer,
@@ -516,8 +528,8 @@ class OTPMainWindow(QtCore.QObject):
         config_xml = os.path.join(tmp_dir, 'config.xml')
         config = OTPConfig(filename=config_xml)
         config.settings['system']['n_threads'] = settings.system['n_threads']
-        config.settings['origin']['id_field'] = 'fid'
-        config.settings['destination']['id_field'] = 'fid'
+        config.settings['origin']['id_field'] = 'eingang'
+        config.settings['destination']['id_field'] = 'adresse'
         config.settings['post_processing']['details'] = True
 
         router_config = config.settings['router_config']
@@ -561,10 +573,10 @@ class OTPMainWindow(QtCore.QObject):
     def analyse(self, target_file):
         job = AnalyseRouting(target_file, self.green_output.layer.getFeatures(),
                              parent=self.ui)
-        dialog = ProgressDialog(job, parent=self.ui,
+        dialog = ProgressDialog(job, parent=self.ui, title='Analyse',
                                 start_elapsed=self.elapsed_time,
                                 logs=self.progress_log,
-                                title='Analyse')
+                                on_success=lambda x: self.add_result_layers())
         dialog.show()
 
     def create_router(self):

@@ -77,7 +77,18 @@ class ProjektgebietProcessed(ProjectTable):
 
     class Meta:
         workspace = 'results'
-        geom = 'Point'
+        geom = 'MultiPolygon'
+
+
+class BaublockErgebnisse(ProjectTable):
+    gruenflaeche_je_einwohner = Field(float, 0)
+    einwohner = Field(int, 0)
+    baublock = Field(int, 0)
+
+    class Meta:
+        workspace = 'results'
+        geom = 'MultiPolygon'
+
 
 
 

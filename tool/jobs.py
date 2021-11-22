@@ -12,9 +12,11 @@ from gruenflaechenotp.tool.tables import (GruenflaechenEingaenge, Projektgebiet,
                                           AdressenProcessed, Baubloecke,
                                           ProjectSettings, Adressen,
                                           ProjektgebietProcessed, Gruenflaechen,
-                                          GruenflaechenEingaengeProcessed)
+                                          GruenflaechenEingaengeProcessed,
+                                          BaublockErgebnisse)
 from gruenflaechenotp.base.spatial import intersect, create_layer
 
+EXPONENTIAL_FACTOR = -0.003
 
 class CloneProject(Worker):
     '''
@@ -147,58 +149,126 @@ class AnalyseRouting(Worker):
         self.green_spaces = green_spaces
 
     def work(self):
-        self.log('')
         self.log('<br><b>Analyse der Ergebnisse des Routings</b><br>')
+
+        self.log('Lese Eingangsdaten...')
+
         project_settings = ProjectSettings.features()[0]
+        df_addresses = AdressenProcessed.features().to_pandas()
+        df_blocks = Baubloecke.features().to_pandas()
+        df_addr_blocks = df_addresses.merge(df_blocks, how='left',
+                                            left_on='baublock', right_on='fid')
+        df_addr_blocks['block_count'] = (
+            df_addr_blocks.groupby('adresse')['baublock'].transform('count'))
+        df_addr_blocks['ew_addr'] = (df_addr_blocks['einwohner'].astype(float) /
+                                     df_addr_blocks['block_count'])
+
+        green_spaces = Gruenflaechen.features()
+        area_data = []
+        for feat in green_spaces:
+            area_data.append((feat.id, feat.geom.area()))
+        df_areas = pd.DataFrame(columns=['gruenflaeche', 'area'], data=area_data)
+        df_entrances = GruenflaechenEingaengeProcessed.features().to_pandas()
+        df_entrances = df_entrances.merge(
+            df_areas, how='left', on='gruenflaeche')
+
         # for some reason pandas automatically replaces underscores in header
         # with spaces, no possibility to turn that off
-        df_results = pd.read_csv(
+        df_routing = pd.read_csv(
             self.results_file, delimiter=';',
             usecols= ['origin id','destination id', 'walk/bike distance (m)'])
-        df_results = df_results.rename(
-            columns={'origin id': 'entrance_id',
-                     'destination id': 'address_id',
+        df_routing = df_routing.rename(
+            columns={'origin id': 'eingang',
+                     'destination id': 'adresse',
                      'walk/bike distance (m)': 'distance'}
         )
-
-        self.set_progress(60)
+        df_routing = df_routing[df_routing['distance'] <=
+                                project_settings.max_walk_dist]
+        self.set_progress(35)
 
         self.log('Analysiere Grünflächennutzung...')
-        df_merged = df_results.merge(df_addr_blocks, how='left', on='address_id')
-        df_merged = df_merged.merge(df_entrances, how='left', on='entrance_id')
-        df_merged = df_merged[df_merged['block_id'].notna() &
-                              df_merged['green_id'].notna()]
-        print()
 
+        df_merged = df_routing.merge(df_addr_blocks, how='left', on='adresse')
+        df_merged = df_merged.merge(df_entrances, how='left', on='eingang')
+        df_merged = df_merged[df_merged['baublock'].notna() &
+                              df_merged['gruenflaeche'].notna()]
+
+        df_merged['weighted_dist'] = df_merged['distance'].apply(
+            lambda x: np.exp(-0.003*x))
+        df_merged['attractivity'] = (df_merged['weighted_dist'] *
+                                     df_merged['area'])
+        df_merged['attractivity_sum'] = df_merged.groupby(
+            'adresse')['attractivity'].transform('sum')
+        df_merged['addr_visit_prob'] = (df_merged['attractivity'] /
+                                   df_merged['attractivity_sum'])
+        df_merged['addr_visits'] = (df_merged['addr_visit_prob'] *
+                                    df_merged['ew_addr'])
+        df_merged['total_area_visits'] = df_merged.groupby(
+            'gruenflaeche')['addr_visits'].transform('sum')
+        df_merged['space_per_visitor'] = (df_merged['area'] /
+                                          df_merged['total_area_visits'])
+        df_merged['space_per_vis_weighted'] = (df_merged['space_per_visitor'] *
+                                               df_merged['addr_visit_prob'])
+        df_results_addr = df_merged.groupby('adresse').sum()
+        df_results_addr['space_used_addr'] = (
+            df_results_addr['space_per_vis_weighted'] *
+            df_results_addr['ew_addr'])
+        df_results_addr = df_results_addr.reset_index()[
+            ['adresse','space_used_addr', 'ew_addr', 'space_per_vis_weighted']]
+
+        df_results_block = df_results_addr.merge(
+            df_addresses, how='left', on='adresse')
+        df_results_block = df_results_block.drop(columns=['fid'])
+        df_results_block = df_results_block.groupby('baublock').sum().reset_index()
+        df_results_block = df_blocks.merge(df_results_block, how='left',
+                                           left_on='fid', right_on='baublock')
+        df_results_block['space_per_inh'] = (
+            df_results_block['space_used_addr'] / df_results_block['einwohner'])
+        df_results_block = df_results_block.fillna(0)
+        df_results_block = df_results_block[
+            ['fid', 'space_per_inh', 'geom', 'einwohner']]
+        self.set_progress(60)
+
+        self.log('Schreibe Ergebnisse...')
+
+        BaublockErgebnisse.remove()
+        results = BaublockErgebnisse.features(create=True)
+        for index, row in df_results_block.iterrows():
+            results.add(baublock=row['fid'], einwohner=row['einwohner'],
+                        gruenflaeche_je_einwohner=row['space_per_inh'],
+                        geom=row['geom'])
 
 
 class PrepareRouting(Worker):
     def work(self):
         self.log('<b>Vorbereitung des Routings</b><br>')
         project_settings = ProjectSettings.features()[0]
-        project_layer = Projektgebiet.as_layer()
         entrances_layer = GruenflaechenEingaenge.as_layer()
         address_layer = Adressen.as_layer()
         block_layer = Baubloecke.as_layer()
         green_spaces_layer = Gruenflaechen.as_layer()
         AdressenProcessed.remove()
         GruenflaechenEingaengeProcessed.remove()
+        ProjektgebietProcessed.remove()
 
         buffer = project_settings.project_buffer
-        # ToDo:buffer
-        # a.geom.buffer(project_settings.project_buffer, 10)
         self.log('Verschneide Adressen und Grünflächeingänge '
                  f'mit dem Projektgebiet inkl. Buffer ({buffer}m) ')
+        proc_pa = ProjektgebietProcessed.features(create=True)
+        for feat in Projektgebiet.features():
+            proc_pa.add(geom=feat.geom.buffer(buffer, 10))
+
+        project_layer_buffered = ProjektgebietProcessed.as_layer()
 
         parameters = {'INPUT': address_layer,
                       'INPUT_FIELDS': ['fid'],
-                      'OVERLAY': project_layer,
+                      'OVERLAY': project_layer_buffered,
                       'OUTPUT':'memory:'}
         addr_in_pa_layer = processing.run(
             'native:intersection', parameters)['OUTPUT']
 
         parameters = {'INPUT': entrances_layer,
-                      'OVERLAY': project_layer,
+                      'OVERLAY': project_layer_buffered,
                       'OVERLAY_FIELDS_PREFIX': 'green_',
                       'OUTPUT':'memory:'}
         ent_in_pa_layer = processing.run(
@@ -246,83 +316,11 @@ class PrepareRouting(Worker):
                                                   maxDistance=max_ent_dist)
             if nearest:
                 proc_entrances.add(eingang=feat.attribute('fid'), geom=geom,
-                                   green_id=nearest[0])
+                                   gruenflaeche=nearest[0])
             else:
                 missing += 1
         if missing:
             self.log(f'{missing} Eingänge konnten im Umkreis von '
                      f'{max_ent_dist}m keiner Grünfläche zugeordnet werden.',
                      warning=True)
-
-
-        return
-        parameters = {'INPUT': entrances_layer,
-                      'OVERLAY': project_layer,
-                      'OVERLAY_FIELDS': [],
-                      'OUTPUT':'memory:'}
-        o_clipped = processing.run(
-            'native:intersection', parameters)['OUTPUT']
-
-        project_layer = self.project_area_output.layer
-        parameters = {'INPUT': address_layer,
-                      'OVERLAY': project_layer,
-                      'OVERLAY_FIELDS': [],
-                      'OUTPUT':'memory:'}
-        d_clipped = processing.run(
-            'native:intersection', parameters)['OUTPUT']
-
-        self.log('Ordne Adressen den Baublöcken zu...')
-        df_results = df_results[df_results['distance'] <=
-                                project_settings.max_walk_dist]
-        addresses = Adressen.features()
-        intersection = intersect(addresses,
-                                 Baubloecke.features(),
-                                 input_fields={'id': 'address_id'},
-                                 output_fields={'id': 'block_id',
-                                                'einwohner': 'ew'},
-                                 epsg=settings.EPSG)
-        data = [list(f.values()) for f in intersection]
-        df_addr_blocks = pd.DataFrame(columns=['address_id', 'block_id', 'ew'],
-                                      data=data)
-        # duplicates occur if there are blocks on top of each other
-        # keep only first match
-        df_addr_blocks = df_addr_blocks.drop_duplicates(subset=['address_id'])
-        df_addr_blocks['block_count'] = (
-            df_addr_blocks.groupby('block_id')['block_id'].transform('count'))
-        df_addr_blocks['ew_addr'] = (df_addr_blocks['ew'].astype(float) /
-                                     df_addr_blocks['block_count'])
-        df_addr_blocks['address_id'] = df_addr_blocks['address_id'].astype(np.int64)
-        missing = len(addresses) - len(df_addr_blocks)
-        if missing:
-            self.log(f'{missing} Adressen konnten keinem Baublock '
-                     'zugeordnet werden.', warning=True)
-        self.set_progress(40)
-
-        self.log('Ordne Eingänge den Grünflächen zu...')
-        entrances = GruenflaechenEingaenge.features()
-        green_index = QgsSpatialIndex()
-        area_data = []
-        for feat in self.green_spaces:
-            area_data.append((feat.id(), feat.geometry().area()))
-            green_index.insertFeature(feat)
-        df_areas = pd.DataFrame(columns=['green_id', 'area'], data=area_data)
-        data = []
-        missing = 0
-        max_ent_dist = 100
-        for feat in entrances:
-            nearest = green_index.nearestNeighbor(feat.geom, 1,
-                                                  maxDistance=max_ent_dist)
-            if nearest:
-                data.append((feat.id, nearest[0]))
-            else:
-                missing += 1
-        df_entrances = pd.DataFrame(columns=['entrance_id', 'green_id'],
-                                    data=data)
-        df_entrances = df_entrances.merge(df_areas, how='left', on='green_id')
-        if missing:
-            self.log(f'{missing} Eingänge konnten im Umkreis von '
-                     f'{max_ent_dist}m keiner Grünfläche zugeordnet werden.',
-                     warning=True)
-
-        self.log('Schreibe Zwischenergebnisse...')
 
