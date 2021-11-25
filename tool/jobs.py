@@ -193,6 +193,20 @@ class AnalyseRouting(Worker):
         df_merged = df_merged[df_merged['baublock'].notna() &
                               df_merged['gruenflaeche'].notna()]
 
+        #data = [
+            #[1, 1, 10000, 1, 400, 50],
+            #[1, 1, 10000, 2, 600, 200],
+            #[1, 1, 10000, 3, 800, 600],
+            #[2, 1, 2500, 1, 400, 700],
+            #[2, 1, 2500, 2, 600, 300],
+            #[2, 1, 2500, 3, 800, 100],
+        #]
+        #df_merged = pd.DataFrame(
+            #data=data,
+            #columns=['gruenflaeche', 'baublock', 'area',
+                     #'adresse', 'ew_addr', 'distance'])
+        #df_merged['weighted_dist'] = [0.860708, 0.548812, 0, 0, 0.406570, 0.740818]
+
         df_merged['weighted_dist'] = df_merged['distance'].apply(
             lambda x: np.exp(-0.003*x))
         df_merged['attractivity'] = (df_merged['weighted_dist'] *
@@ -220,6 +234,9 @@ class AnalyseRouting(Worker):
             df_addresses, how='left', on='adresse')
         df_results_block = df_results_block.drop(columns=['fid'])
         df_results_block = df_results_block.groupby('baublock').sum().reset_index()
+
+        # ToDo: only blocks in project area!!
+
         df_results_block = df_blocks.merge(df_results_block, how='left',
                                            left_on='fid', right_on='baublock')
         df_results_block['space_per_inh'] = (

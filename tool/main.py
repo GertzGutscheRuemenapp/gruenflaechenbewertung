@@ -3,7 +3,10 @@ import math
 from PyQt5 import uic,  QtCore, QtWidgets
 from qgis import utils
 from qgis._core import QgsCoordinateReferenceSystem
-from qgis.core import QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel
+from qgis.core import (QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel,
+                       QgsSymbol, QgsSimpleFillSymbolLayer, QgsRendererRange,
+                       QgsRendererCategory, QgsCategorizedSymbolRenderer,
+                       QgsGraduatedSymbolRenderer)
 
 from gruenflaechenotp.base.project import (ProjectManager, settings,
                                            ProjectLayer, OSMBackgroundLayer)
@@ -83,6 +86,8 @@ class OTPMainWindow(QtCore.QObject):
 
         self.ui.required_green_edit.valueChanged.connect(
             lambda x: save_project_setting('required_green', x))
+        self.ui.required_green_edit.valueChanged.connect(
+            self.set_result_categories)
         self.ui.max_walk_dist_edit.valueChanged.connect(
             lambda x: save_project_setting('max_walk_dist', x))
         self.ui.project_buffer_edit.valueChanged.connect(
@@ -345,6 +350,7 @@ class OTPMainWindow(QtCore.QObject):
                     p.groupname==project.groupname)
 
         self.add_input_layers()
+        self.add_result_layers()
 
         backgroundOSM = OSMBackgroundLayer(groupname='Hintergrundkarten')
         backgroundOSM.draw()
@@ -402,6 +408,60 @@ class OTPMainWindow(QtCore.QObject):
             label='verfügbare Grünfläche je Einwohner je Baublock',
             style_file='baublock_ergebnisse.qml',
             redraw=False)
+        self.set_result_categories()
+
+    def set_result_categories(self):
+        def interpolate(start: float, end: float, step: float, n_steps: float) -> float:
+            ''' interpolate a value between start and end value '''
+            return (end - start) * step / n_steps + start
+        layer = self.results_output.layer
+        step = 2
+        b_point = self.project_settings.required_green
+        b = round(b_point / step)
+        bins = [(0, 0)] + [(i * step, (i + 1) *step) for i in range(b)]
+        if b_point > b * step:
+            bins.append((b*step, b_point))
+        bins.append((b_point, 500000))
+
+        geometry_type = layer.geometryType()
+        categories = []
+
+        start_color = (166, 97, 26)
+        end_color = (1, 133, 113)
+
+        for i, (lower, upper) in enumerate(bins):
+            if (i == 0):
+                label = lower
+            elif (i == len(bins) - 1):
+                label = f'>{lower}'
+            else:
+                label = f'>{lower} bis ≤{upper}'
+
+            symbol = QgsSymbol.defaultSymbol(geometry_type)
+
+            # configure a symbol layer
+            layer_style = {}
+            rgb = []
+            for c in range(3):
+                rgb.append(str(int(interpolate(start_color[c], end_color[c],
+                                               i, len(bins)))))
+            layer_style['color'] = ','.join(rgb)
+            symbol_layer = QgsSimpleFillSymbolLayer.create(layer_style)
+
+            # replace default symbol layer with the configured one
+            if symbol_layer is not None:
+                symbol.changeSymbolLayer(0, symbol_layer)
+
+            label = f'{label}m²'
+            # create renderer object
+            category = QgsRendererRange(lower, upper, symbol, label)
+            # entry for the list of category items
+            categories.append(category)
+
+        # create renderer object
+        renderer = QgsGraduatedSymbolRenderer('gruenflaeche_je_einwohner',
+                                              categories)
+        layer.setRenderer(renderer)
 
     def apply_project_settings(self, project):
         self.ui.required_green_edit.setValue(self.project_settings.required_green)
