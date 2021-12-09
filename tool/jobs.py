@@ -5,6 +5,7 @@ from qgis.PyQt.QtCore import QVariant, QProcess
 import pandas as pd
 import numpy as np
 import processing
+import os
 
 from gruenflaechenotp.base.worker import Worker
 from gruenflaechenotp.base.project import ProjectManager, settings
@@ -14,8 +15,8 @@ from gruenflaechenotp.tool.tables import (GruenflaechenEingaenge, Projektgebiet,
                                           ProjektgebietProcessed, Gruenflaechen,
                                           GruenflaechenEingaengeProcessed,
                                           BaublockErgebnisse)
-from gruenflaechenotp.base.spatial import intersect, create_layer
 
+DEBUG = False
 EXPONENTIAL_FACTOR = -0.003
 
 class CloneProject(Worker):
@@ -91,8 +92,8 @@ class ImportLayer(Worker):
                         repaired += 1
                 else:
                     geom = QgsGeometry(geom)
-                    # infinite coordinates are considered valid but fail to transform
-                    # -> add empty geometry
+                    # infinite coordinates are considered valid but fail
+                    # to transform -> add empty geometry
                     try:
                         geom.transform(tr)
                     except:
@@ -112,8 +113,8 @@ class ImportLayer(Worker):
         self.log(f'{self.layer.featureCount()} Features erfolgreich importiert')
         not_repaired = n_broken_geometries - repaired
         if n_broken_geometries:
-            self.log(f'{n_broken_geometries} Features hatten keine oder defekte '
-                     f'Geometrien. {repaired} davon konnten repariert werden.')
+            self.log(f'{n_broken_geometries} Features hatten keine oder defekte'
+                     f' Geometrien. {repaired} davon konnten repariert werden.')
         if not_repaired:
             self.log(f'{not_repaired} Features wurde ohne Geometrie in das '
                      'Projekt übernommen', warning=True)
@@ -167,7 +168,8 @@ class AnalyseRouting(Worker):
         area_data = []
         for feat in green_spaces:
             area_data.append((feat.id, feat.geom.area()))
-        df_areas = pd.DataFrame(columns=['gruenflaeche', 'area'], data=area_data)
+        df_areas = pd.DataFrame(
+            columns=['gruenflaeche', 'area'], data=area_data)
         df_entrances = GruenflaechenEingaengeProcessed.features().to_pandas()
         df_entrances = df_entrances.merge(
             df_areas, how='left', on='gruenflaeche')
@@ -193,20 +195,6 @@ class AnalyseRouting(Worker):
         df_merged = df_merged[df_merged['baublock'].notna() &
                               df_merged['gruenflaeche'].notna()]
 
-        #data = [
-            #[1, 1, 10000, 1, 400, 50],
-            #[1, 1, 10000, 2, 600, 200],
-            #[1, 1, 10000, 3, 800, 600],
-            #[2, 1, 2500, 1, 400, 700],
-            #[2, 1, 2500, 2, 600, 300],
-            #[2, 1, 2500, 3, 800, 100],
-        #]
-        #df_merged = pd.DataFrame(
-            #data=data,
-            #columns=['gruenflaeche', 'baublock', 'area',
-                     #'adresse', 'ew_addr', 'distance'])
-        #df_merged['weighted_dist'] = [0.860708, 0.548812, 0, 0, 0.406570, 0.740818]
-
         df_merged['weighted_dist'] = df_merged['distance'].apply(
             lambda x: np.exp(-0.003*x))
         df_merged['attractivity'] = (df_merged['weighted_dist'] *
@@ -223,6 +211,13 @@ class AnalyseRouting(Worker):
                                           df_merged['total_area_visits'])
         df_merged['space_per_vis_weighted'] = (df_merged['space_per_visitor'] *
                                                df_merged['addr_visit_prob'])
+
+        if DEBUG:
+            df_merged = df_merged.drop(columns=['fid_x', 'fid_y', 'geom_x',
+                                                'geom_y', 'fid', 'geom'])
+            ppath = ProjectManager().active_project.path
+            df_merged.to_csv(os.path.join(ppath, 'schritt_8.csv'), sep=';')
+
         df_results_addr = df_merged.groupby('adresse').sum()
         df_results_addr['space_used_addr'] = (
             df_results_addr['space_per_vis_weighted'] *
@@ -230,10 +225,15 @@ class AnalyseRouting(Worker):
         df_results_addr = df_results_addr.reset_index()[
             ['adresse','space_used_addr', 'ew_addr', 'space_per_vis_weighted']]
 
+        if DEBUG:
+            df_results_addr.to_csv(os.path.join(ppath, 'schritt_11.csv'),
+                                   sep=';')
+
         df_results_block = df_results_addr.merge(
             df_addresses, how='left', on='adresse')
         df_results_block = df_results_block.drop(columns=['fid'])
-        df_results_block = df_results_block.groupby('baublock').sum().reset_index()
+        df_results_block = df_results_block.groupby(
+            'baublock').sum().reset_index()
 
         # ToDo: only blocks in project area!!
 
@@ -242,6 +242,12 @@ class AnalyseRouting(Worker):
         df_results_block['space_per_inh'] = (
             df_results_block['space_used_addr'] / df_results_block['einwohner'])
         df_results_block = df_results_block.fillna(0)
+
+        if DEBUG:
+            df_out = df_results_block[
+                ['fid', 'space_per_inh', 'space_used_addr' , 'einwohner']]
+            df_out.to_csv(os.path.join(ppath, 'schritt_13+.csv'), sep=';')
+
         df_results_block = df_results_block[
             ['fid', 'space_per_inh', 'geom', 'einwohner']]
         self.set_progress(60)

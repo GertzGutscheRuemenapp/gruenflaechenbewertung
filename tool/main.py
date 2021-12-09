@@ -43,6 +43,7 @@ class OTPMainWindow(QtCore.QObject):
         uic.loadUi(main_form, self.ui)
         self.project_manager = ProjectManager()
         self.project_settings = None
+        self.results_output = None
         graph_path = self.project_manager.settings.graph_path
         self.canvas = utils.iface.mapCanvas()
         #project = QgsProject.instance()
@@ -414,6 +415,8 @@ class OTPMainWindow(QtCore.QObject):
         def interpolate(start: float, end: float, step: float, n_steps: float) -> float:
             ''' interpolate a value between start and end value '''
             return (end - start) * step / n_steps + start
+        if not self.results_output:
+            return
         layer = self.results_output.layer
         step = 2
         b_point = self.project_settings.required_green
