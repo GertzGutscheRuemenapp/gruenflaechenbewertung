@@ -474,65 +474,6 @@ ACHTUNG: wird ignori</string>
            <string>Routingparameter</string>
           </property>
           <layout class="QGridLayout" name="gridLayout_5">
-           <item row="2" column="1">
-            <widget class="QCheckBox" name="wheelchair_check">
-             <property name="toolTip">
-              <string>Berücksichtung der Zugänglichkeit für Rollstühle an/aus</string>
-             </property>
-             <property name="text">
-              <string/>
-             </property>
-            </widget>
-           </item>
-           <item row="3" column="1">
-            <widget class="QDoubleSpinBox" name="max_slope_edit">
-             <property name="toolTip">
-              <string>maximale Steigung, bis zu der ein Routenabschnitt als für Rollstühle zugänglich gilt</string>
-             </property>
-             <property name="alignment">
-              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-             </property>
-             <property name="decimals">
-              <number>6</number>
-             </property>
-             <property name="singleStep">
-              <double>0.010000000000000</double>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="0">
-            <widget class="QLabel" name="label_15">
-             <property name="toolTip">
-              <string>maximale Laufgeschwindigkeit</string>
-             </property>
-             <property name="text">
-              <string>max. Laufgeschwindigkeit</string>
-             </property>
-            </widget>
-           </item>
-           <item row="3" column="0">
-            <widget class="QLabel" name="label_34">
-             <property name="toolTip">
-              <string>maximale Steigung, bis zu der ein Routenabschnitt als für Rollstühle zugänglich gilt</string>
-             </property>
-             <property name="text">
-              <string>max. Steigung für Rollstühle</string>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="2">
-            <widget class="QLabel" name="label_16">
-             <property name="maximumSize">
-              <size>
-               <width>20</width>
-               <height>16777215</height>
-              </size>
-             </property>
-             <property name="text">
-              <string>m/s</string>
-             </property>
-            </widget>
-           </item>
            <item row="0" column="1">
             <widget class="QDoubleSpinBox" name="walk_speed_edit">
              <property name="toolTip">
@@ -543,16 +484,6 @@ ACHTUNG: wird ignori</string>
              </property>
              <property name="singleStep">
               <double>0.100000000000000</double>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="0">
-            <widget class="QLabel" name="label_33">
-             <property name="toolTip">
-              <string>Berücksichtung der Zugänglichkeit für Rollstühle an/aus</string>
-             </property>
-             <property name="text">
-              <string>Zugänglichkeit Rollstuhl </string>
              </property>
             </widget>
            </item>
@@ -571,6 +502,29 @@ ACHTUNG: wird ignori</string>
               </size>
              </property>
             </spacer>
+           </item>
+           <item row="0" column="2">
+            <widget class="QLabel" name="label_16">
+             <property name="maximumSize">
+              <size>
+               <width>20</width>
+               <height>16777215</height>
+              </size>
+             </property>
+             <property name="text">
+              <string>m/s</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="0">
+            <widget class="QLabel" name="label_15">
+             <property name="toolTip">
+              <string>maximale Laufgeschwindigkeit</string>
+             </property>
+             <property name="text">
+              <string>max. Laufgeschwindigkeit</string>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>

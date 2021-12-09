@@ -98,11 +98,11 @@ class OTPMainWindow(QtCore.QObject):
             lambda x: save_project_setting('router', x))
         self.ui.walk_speed_edit.valueChanged.connect(
             lambda x: save_project_setting('walk_speed', x))
-        self.ui.wheelchair_check.stateChanged.connect(
-            lambda: save_project_setting('wheelchair',
-                                         self.ui.wheelchair_check.isChecked()))
-        self.ui.max_slope_edit.valueChanged.connect(
-            lambda x: save_project_setting('max_slope', x))
+        #self.ui.wheelchair_check.stateChanged.connect(
+            #lambda: save_project_setting('wheelchair',
+                                         #self.ui.wheelchair_check.isChecked()))
+        #self.ui.max_slope_edit.valueChanged.connect(
+            #lambda x: save_project_setting('max_slope', x))
 
         self.ui.create_router_button.clicked.connect(self.create_router)
 
@@ -473,8 +473,8 @@ class OTPMainWindow(QtCore.QObject):
 
         #self.router_combo.setValue(project_settings.router)
         self.ui.walk_speed_edit.setValue(self.project_settings.walk_speed)
-        self.ui.wheelchair_check.setChecked(self.project_settings.wheelchair)
-        self.ui.max_slope_edit.setValue(self.project_settings.max_slope)
+        #self.ui.wheelchair_check.setChecked(self.project_settings.wheelchair)
+        #self.ui.max_slope_edit.setValue(self.project_settings.max_slope)
 
         self.setup_routers()
 
