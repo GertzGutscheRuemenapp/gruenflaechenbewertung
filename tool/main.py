@@ -4,9 +4,8 @@ from PyQt5 import uic,  QtCore, QtWidgets
 from qgis import utils
 from qgis._core import QgsCoordinateReferenceSystem
 from qgis.core import (QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel,
-                       QgsSymbol, QgsSimpleFillSymbolLayer, QgsRendererRange,
-                       QgsRendererCategory, QgsCategorizedSymbolRenderer,
-                       QgsGraduatedSymbolRenderer)
+                       QgsSymbol, QgsSimpleFillSymbolLayer,
+                       QgsRuleBasedRenderer)
 import shutil
 
 from gruenflaechenotp.base.project import (ProjectManager, settings,
@@ -447,7 +446,6 @@ class OTPMainWindow(QtCore.QObject):
             addresses, groupname=groupname, prepend=True)
         self.results_output.draw(
             label='verfügbare Grünfläche je Einwohner je Baublock',
-            style_file='baublock_ergebnisse.qml',
             redraw=False)
         self.set_result_categories()
 
@@ -467,10 +465,13 @@ class OTPMainWindow(QtCore.QObject):
         bins.append((b_point, 500000))
 
         geometry_type = layer.geometryType()
-        categories = []
+        field = 'gruenflaeche_je_einwohner'
 
         start_color = (166, 97, 26)
         end_color = (1, 133, 113)
+
+        root_rule = QgsRuleBasedRenderer.Rule(
+            QgsSymbol.defaultSymbol(geometry_type))
 
         for i, (lower, upper) in enumerate(bins):
             if (i == 0):
@@ -496,14 +497,24 @@ class OTPMainWindow(QtCore.QObject):
                 symbol.changeSymbolLayer(0, symbol_layer)
 
             label = f'{label}m²'
-            # create renderer object
-            category = QgsRendererRange(lower, upper, symbol, label)
-            # entry for the list of category items
-            categories.append(category)
+            expression = f'"{field}" >= {lower} AND "{field}" <= {upper}'
+            rule = QgsRuleBasedRenderer.Rule(symbol, label=label,
+                                             filterExp=expression)
+            root_rule.appendChild(rule)
+
+
+        expression = '"einwohner" = 0'
+        symbol = QgsSymbol.defaultSymbol(geometry_type)
+        layer_style['color'] = '175, 175, 175'
+        label = f'keine Einwohner'
+        symbol_layer = QgsSimpleFillSymbolLayer.create(layer_style)
+        symbol.changeSymbolLayer(0, symbol_layer)
+        rule = QgsRuleBasedRenderer.Rule(symbol, label=label,
+                                         filterExp=expression)
+        root_rule.appendChild(rule)
 
         # create renderer object
-        renderer = QgsGraduatedSymbolRenderer('gruenflaeche_je_einwohner',
-                                              categories)
+        renderer = QgsRuleBasedRenderer(root_rule)
         layer.setRenderer(renderer)
 
     def apply_project_settings(self, project):
@@ -511,7 +522,6 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.max_walk_dist_edit.setValue(self.project_settings.max_walk_dist)
         self.ui.project_buffer_edit.setValue(self.project_settings.project_buffer)
 
-        #self.router_combo.setValue(project_settings.router)
         self.ui.walk_speed_edit.setValue(self.project_settings.walk_speed)
         #self.ui.wheelchair_check.setChecked(self.project_settings.wheelchair)
         #self.ui.max_slope_edit.setValue(self.project_settings.max_slope)
@@ -747,16 +757,6 @@ class OTPMainWindow(QtCore.QObject):
         '''
         remove all project-related layers and try to close all workspaces
         '''
-        #qgisproject = QgsProject.instance()
-        #layer_root = qgisproject.layerTreeRoot()
-        ## remove all project layers from layer tree
-        #for project in self.project_manager.projects:
-            #group = layer_root.findGroup(project.groupname)
-            #if group:
-                #for layer in group.findLayers():
-                    #qgisproject.removeMapLayer(layer.layerId())
-                #group.removeAllChildren()
-                #layer_root.removeChildNode(group)
         for ws in Workspace.get_instances():
             if not ws.database.read_only:
                 ws.close()
