@@ -60,8 +60,6 @@ p, li { white-space: pre-wrap; }
 &lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'MS Shell Dlg 2'; font-size:8pt; font-weight:400; font-style:normal;&quot;&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:8.25pt;&quot;&gt;Hinweis: Geben Sie einen Pfad zu einem Ordner mit den Eingangsdaten an. Dieser sollte folgende Daten für den Betrachtungsraum enthalten&lt;/span&gt;&lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:8.25pt;&quot;&gt;- das OSM Straßennetz als PBF-Datei &lt;/span&gt;&lt;span style=&quot; font-size:8.25pt; font-style:italic;&quot;&gt;(*.pbf)&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:8.25pt;&quot;&gt;- Fahrplandaten als GTFS Feed als Zip-Datei&lt;/span&gt;&lt;span style=&quot; font-size:8.25pt; font-style:italic;&quot;&gt; (*.zip, optional, für verschiedene Modi benötigt)&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:8.25pt;&quot;&gt;- Höhendaten als GeoTIFF &lt;/span&gt;&lt;span style=&quot; font-size:8.25pt; font-style:italic;&quot;&gt;(*.tiff, optional)&lt;/span&gt;&lt;/p&gt;
 &lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-size:8.25pt;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:8.25pt;&quot;&gt;Der erstellte Graph wird in ein Verzeichnis mit dem angegebenen Routernamen in das in den Systemeinstellungen eingestellte Routerverzeichnis kopiert.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
@@ -135,7 +133,7 @@ p, li { white-space: pre-wrap; }
    <item>
     <widget class="QLabel" name="label_2">
      <property name="text">
-      <string>Name des zu erstellenden Routers (beginnend mit Buchstaben, keine Freizeichen oder Sonderzeichen)</string>
+      <string>Name des zu erstellenden Routers (beginnend mit Buchstaben, keine Sonderzeichen)</string>
      </property>
     </widget>
    </item>

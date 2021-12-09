@@ -7,12 +7,14 @@ from qgis.core import (QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel,
                        QgsSymbol, QgsSimpleFillSymbolLayer, QgsRendererRange,
                        QgsRendererCategory, QgsCategorizedSymbolRenderer,
                        QgsGraduatedSymbolRenderer)
+import shutil
 
 from gruenflaechenotp.base.project import (ProjectManager, settings,
                                            ProjectLayer, OSMBackgroundLayer)
-from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, RouterDialog, InfoDialog,
+from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, InfoDialog,
                                            SettingsDialog, NewProjectDialog,
-                                           ImportLayerDialog)
+                                           NewRouterDialog, ImportLayerDialog,
+                                           ExecBuildRouterDialog)
 from gruenflaechenotp.base.database import Workspace
 from gruenflaechenotp.tool.tables import (
     ProjectSettings, Projektgebiet, Adressen, Baubloecke, Gruenflaechen,
@@ -28,6 +30,7 @@ import tempfile
 import webbrowser
 
 TITLE = "Grünflächenbewertung"
+DEFAULT_ROUTER = "Standardrouter Lichtenberg"
 
 # how many results are written while running batch script
 PRINT_EVERY_N_LINES = 100
@@ -44,17 +47,11 @@ class OTPMainWindow(QtCore.QObject):
         self.project_manager = ProjectManager()
         self.project_settings = None
         self.results_output = None
-        graph_path = self.project_manager.settings.graph_path
         self.canvas = utils.iface.mapCanvas()
         #project = QgsProject.instance()
         #crs = QgsCoordinateReferenceSystem(f'epsg:{settings.EPSG}')
         #project.setCrs(crs)
         #self.canvas.mapSettings().setDestinationCrs(crs)
-        if graph_path and not os.path.exists(graph_path):
-            try:
-                os.makedirs(graph_path)
-            except:
-                pass
         self.on_close = on_close
         self.ui.setWindowTitle(TITLE)
         self.setupUi()
@@ -94,8 +91,6 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.project_buffer_edit.valueChanged.connect(
             lambda x: save_project_setting('project_buffer', x))
 
-        self.ui.router_combo.currentTextChanged.connect(
-            lambda x: save_project_setting('router', x))
         self.ui.walk_speed_edit.valueChanged.connect(
             lambda x: save_project_setting('walk_speed', x))
         #self.ui.wheelchair_check.stateChanged.connect(
@@ -104,7 +99,21 @@ class OTPMainWindow(QtCore.QObject):
         #self.ui.max_slope_edit.valueChanged.connect(
             #lambda x: save_project_setting('max_slope', x))
 
+        self.ui.remove_router_button.clicked.connect(self.remove_router)
         self.ui.create_router_button.clicked.connect(self.create_router)
+
+        def change_router(name):
+            save_project_setting('router', name)
+            self.ui.remove_router_button.setEnabled(name != DEFAULT_ROUTER)
+            self.ui.build_router_button.setEnabled(name != DEFAULT_ROUTER)
+        self.ui.router_combo.currentTextChanged.connect(change_router)
+
+        def open_current_router():
+            router_path = os.path.join(settings.graph_path,
+                                       self.project_settings.router)
+            os.startfile(router_path)
+        self.ui.open_router_button.clicked.connect(open_current_router)
+        self.ui.build_router_button.clicked.connect(self.build_router)
 
         self.ui.import_project_area_button.clicked.connect(
             self.import_project_area)
@@ -156,7 +165,8 @@ class OTPMainWindow(QtCore.QObject):
         based on this setup. Automatically set the new project as active project
         if successfully created
         '''
-        dialog = NewProjectDialog()
+        excluded_names = [p.name for p in self.project_manager.projects]
+        dialog = NewProjectDialog(excluded_names=excluded_names)
         ok, project_name = dialog.show()
 
         if ok:
@@ -178,6 +188,21 @@ class OTPMainWindow(QtCore.QObject):
             ])
             dialog = ProgressDialog(job, parent=self.ui)
             dialog.show()
+
+    def create_router(self):
+        graph_path = settings.graph_path
+        excluded_names = os.listdir(graph_path)
+        dialog = NewRouterDialog(excluded_names=excluded_names)
+        ok, router_name = dialog.show()
+
+        if ok:
+            template_path = os.path.join(
+                settings.TEMPLATE_PATH, DEFAULT_ROUTER)
+            router_path = os.path.join(graph_path, router_name)
+            shutil.copytree(template_path, router_path)
+            self.project_settings.router = router_name
+            self.project_settings.save()
+            self.setup_routers()
 
     def import_project_area(self):
         table = Projektgebiet.get_table()
@@ -323,6 +348,21 @@ class OTPMainWindow(QtCore.QObject):
                 self.canvas.mapCanvasRefreshed.disconnect(on_refresh)
             self.canvas.mapCanvasRefreshed.connect(on_refresh)
             self.canvas.refreshAllLayers()
+
+    def remove_router(self):
+        router = self.ui.router_combo.currentText()
+        if not router:
+            return
+        reply = QtWidgets.QMessageBox.question(
+            self.ui, 'Router entfernen',
+            f'Soll der Router "{router}" entfernt werden?\n'
+            '(alle Projektdaten werden gelöscht)',
+             QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
+        if reply == QtWidgets.QMessageBox.Yes:
+            graph_path = settings.graph_path
+            router_path = os.path.join(graph_path, router)
+            shutil.rmtree(router_path)
+            self.ui.router_combo.setCurrentIndex(0)
 
     def change_project(self, project):
         if not project:
@@ -485,12 +525,19 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.router_combo.clear()
         idx = 0
         graph_path = settings.graph_path
-        if not os.path.exists(graph_path):
+        if not graph_path:
             self.ui.router_combo.addItem(
-                'Verzeichnis mit Routern nicht gefunden')
+                'Verzeichnis mit Routern nicht angegeben')
             self.ui.router_combo.setEnabled(False)
             self.ui.create_router_button.setEnabled(False)
         else:
+            if not os.path.exists(graph_path):
+                os.makedirs(graph_path)
+            default_router_path = os.path.join(graph_path, DEFAULT_ROUTER)
+            if not os.path.exists(default_router_path):
+                template_path = os.path.join(
+                    settings.TEMPLATE_PATH, DEFAULT_ROUTER)
+                shutil.copytree(template_path, default_router_path)
             # subdirectories in graph-dir are treated as routers by OTP
             for i, subdir in enumerate(os.listdir(graph_path)):
                 path = os.path.join(graph_path, subdir)
@@ -505,8 +552,13 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.router_combo.setCurrentIndex(idx)
         self.ui.router_combo.blockSignals(False)
         if not current_router:
-            self.project_settings.router = self.ui.router_combo.currentText()
+            current_router = self.ui.router_combo.currentText()
+            self.project_settings.router = current_router
             self.project_settings.save()
+        self.ui.remove_router_button.setEnabled(
+            current_router != DEFAULT_ROUTER)
+        self.ui.build_router_button.setEnabled(
+            current_router != DEFAULT_ROUTER)
 
     def calculate(self):
         otp_jar = settings.system['otp_jar_file']
@@ -642,9 +694,10 @@ class OTPMainWindow(QtCore.QObject):
                                 on_success=lambda x: self.add_result_layers())
         dialog.show()
 
-    def create_router(self):
+    def build_router(self):
         java_executable = settings.system['java']
         otp_jar = settings.system['otp_jar_file']
+        memory = settings.system['reserved']
         if not os.path.exists(otp_jar):
             msg_box = QtWidgets.QMessageBox(
                 QtWidgets.QMessageBox.Warning, "Fehler",
@@ -658,11 +711,13 @@ class OTPMainWindow(QtCore.QObject):
             msg_box.exec_()
             return
         graph_path = settings.graph_path
-        memory = settings.system['reserved']
-        diag = RouterDialog(graph_path, java_executable, otp_jar,
-                            memory=memory, parent=self.ui)
-        diag.exec_()
-        self.setup_routers()
+        router = self.ui.router_combo.currentText()
+        router_path = os.path.join(graph_path, router)
+        if not router:
+            return
+        diag = ExecBuildRouterDialog(router_path, java_executable, otp_jar,
+                                     memory=memory, parent=self.ui)
+        diag.show()
 
     def show_info(self):
         diag = InfoDialog(parent=self.ui)

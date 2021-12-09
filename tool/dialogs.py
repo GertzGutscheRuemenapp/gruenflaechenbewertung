@@ -107,8 +107,9 @@ class NewProjectDialog(Dialog):
     '''
     dialog to select a layer and a name as inputs for creating a new project
     '''
-    def __init__(self, placeholder='', **kwargs):
+    def __init__(self, placeholder='', excluded_names=[], **kwargs):
         self.placeholder = placeholder
+        self.excluded_names = excluded_names
         super().__init__(**kwargs)
 
     def setupUi(self):
@@ -118,15 +119,12 @@ class NewProjectDialog(Dialog):
         self.setMinimumWidth(500)
         self.setWindowTitle('Neues Projekt erstellen')
 
-        project_manager = ProjectManager()
-        self.project_names = [p.name for p in project_manager.projects]
-
         layout = QtWidgets.QVBoxLayout(self)
-        label = QtWidgets.QLabel('Name des Projekts')
+        self.label = QtWidgets.QLabel('Name des Projekts')
         self.name_edit = QtWidgets.QLineEdit()
         self.name_edit.setText(self.placeholder)
         self.name_edit.textChanged.connect(self.validate)
-        layout.addWidget(label)
+        layout.addWidget(self.label)
         layout.addWidget(self.name_edit)
 
         self.status_label = QtWidgets.QLabel()
@@ -156,13 +154,13 @@ class NewProjectDialog(Dialog):
         regexp = re.compile('[\\\/\:*?\"\'<>|]')
         error = False
         if name and regexp.search(name):
-            status_text = ('Der Projektname darf keines der folgenden Zeichen '
+            status_text = ('Der Name darf keines der folgenden Zeichen '
                            'enthalten: \/:*?"\'<>|')
             error = True
-        elif name in self.project_names:
+        elif name in self.excluded_names:
             status_text = (
-                f'Ein Projekt mit dem Namen {name} existiert bereits!\n'
-                'Projektnamen müssen einzigartig sein.')
+                f'Ein Ordner mit dem Namen {name} existiert bereits!\n'
+                'Die Namen müssen einzigartig sein.')
             error = True
 
         self.status_label.setText(status_text)
@@ -177,6 +175,13 @@ class NewProjectDialog(Dialog):
         if confirmed:
             return confirmed, self.name_edit.text()
         return False, None
+
+
+class NewRouterDialog(NewProjectDialog):
+    def setupUi(self):
+        super().setupUi()
+        self.setWindowTitle('Neuen Router erstellen')
+        self.label.setText('Name des Routers')
 
 
 class ImportLayerDialog(Dialog):
@@ -322,8 +327,7 @@ class ExecOTPDialog(ProgressDialog):
     n_points: number of points to calculate in one iteration
     points_per_tick: how many points are calculated before showing progress
     """
-    def __init__(self, command, n_points=0, points_per_tick=50,
-                 **kwargs):
+    def __init__(self, command, n_points=0, points_per_tick=50, **kwargs):
         super().__init__(None, title='OTP Routing', **kwargs)
 
         # QProcess object for external app
@@ -373,23 +377,18 @@ class ExecOTPDialog(ProgressDialog):
         super().stop()
 
 
-class ExecCreateRouterDialog(ProgressDialog):
-    def __init__(self, source_folder, target_folder,
-                 java_executable, otp_jar, memory=2,
-                 parent=None):
-        super().__init__(parent=parent)
-        self.target_folder = target_folder
-        self.source_folder = source_folder
-        self.command = '''
-        "{javacmd}" -Xmx{ram_GB}G -jar "{otp_jar}"
+class ExecBuildRouterDialog(ProgressDialog):
+    def __init__(self, folder, java_executable, otp_jar, memory=2, **kwargs):
+        super().__init__(None, title='Router bauen', **kwargs)
+        self.folder = folder
+        self.command = f'''
+        "{java_executable}" -Xmx{memory}G -jar "{otp_jar}"
         --build "{folder}"
-        '''.format(javacmd=java_executable,
-                   ram_GB=memory,
-                   otp_jar=otp_jar,
-                   folder=source_folder)
+        '''
+        self.success = False
         self.process = QtCore.QProcess(self)
-        self.process.started.connect(self.running)
-        self.process.finished.connect(self.finished)
+        self.process.finished.connect(self._success)
+
         def show_progress():
             out = self.process.readAllStandardOutput()
             out = str(out.data(), encoding='utf-8')
@@ -401,94 +400,23 @@ class ExecCreateRouterDialog(ProgressDialog):
 
         self.process.readyReadStandardOutput.connect(show_progress)
         self.process.readyReadStandardError.connect(show_progress)
-        self.startButton.clicked.emit(True)  #auto start
+        def error(sth):
+            self.error = True
+        self.process.errorOccurred.connect(error)
 
     def run(self):
-        self.killed = False
-        self.progress_bar.setStyleSheet(DEFAULT_STYLE)
-        self.progress_bar.setValue(0)
+        super().run()
+        self.show_status('<br><b>Bauen des Routers</b><br>')
+        self.show_status('Entferne existierenden Graph...')
+        os.remove(os.path.join(self.folder, 'Graph.obj'))
+        self.show_status('Script: <i>' + self.command + '</i>')
         self.process.start(self.command)
 
-    def running(self):
-        self.cancelButton.clicked.connect(self.kill)
-        super().running()
-
-    def stopped(self):
-        self.cancelButton.clicked.disconnect(self.kill)
-        super().stopped()
-
-    def finished(self):
-        self.startButton.setText('Neustart')
-        self.timer.stop()
-        if self.process.exitCode() == QtCore.QProcess.NormalExit and not self.killed:
-            self.show_status("graph created...")
-            self.progress_bar.setValue(100)
-            self.progress_bar.setStyleSheet(FINISHED_STYLE)
-            graph_file = os.path.join(self.source_folder, "Graph.obj")
-            dst_file = os.path.join(self.target_folder, "Graph.obj")
-            if not os.path.exists(self.target_folder):
-                self.show_status("creating target folder in router directory...")
-                os.makedirs(self.target_folder)
-            if graph_file != dst_file:
-                if os.path.exists(dst_file):
-                    self.show_status("overwriting old graph...")
-                    os.remove(dst_file)
-                self.show_status("moving graph to target location...")
-                move(graph_file, dst_file)
-            self.show_status("done")
-        else:
-            self.progress_bar.setStyleSheet(ABORTED_STYLE)
-        self.stopped()
-
-    def kill(self):
-        self.timer.stop()
-        self.killed = True
+    def stop(self):
         self.process.kill()
-        self.log_edit.insertHtml('<b> Vorgang abgebrochen </b> <br>')
-        self.log_edit.moveCursor(QtGui.QTextCursor.End)
-
-
-class RouterDialog(QtWidgets.QDialog, ROUTER_FORM_CLASS):
-    def __init__(self, graph_path, java_executable, otp_jar, memory=2, parent=None):
-        super().__init__(parent=parent)
-        self.graph_path = graph_path
-        self.java_executable = java_executable
-        self.otp_jar = otp_jar
-        self.memory = memory
-        self.setupUi(self)
-        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
-        self.close_button.clicked.connect(self.close)
-        self.source_browse_button.clicked.connect(self.browse_source_path)
-
-        # name has to start with letter, no spaces or special characters
-        regex = QtCore.QRegExp("[A-Za-z][A-Za-z0-9_]*")
-        validator = QtGui.QRegExpValidator(regex, self)
-        self.router_name_edit.setValidator(validator)
-
-        self.create_button.clicked.connect(self.run)
-
-    def browse_source_path(self):
-        path = str(
-            QtWidgets.QFileDialog.getExistingDirectory(
-                self,
-                u'Verzeichnis mit Eingangsdaten wählen',
-                self.source_edit.text()
-            )
-        )
-        if not path:
-            return
-        self.source_edit.setText(path)
-
-    def run(self):
-        name = self.router_name_edit.text()
-        path = self.source_edit.text()
-        if not name:
-            return
-        target_folder = os.path.join(self.graph_path, name)
-        diag = ExecCreateRouterDialog(path, target_folder,
-                                      self.java_executable, self.otp_jar,
-                                      memory=self.memory, parent=self)
-        diag.exec_()
+        self.error = True
+        self.success = False
+        super().stop()
 
 
 class SettingsDialog(Dialog):
