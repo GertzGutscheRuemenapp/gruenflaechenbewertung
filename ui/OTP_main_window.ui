@@ -505,6 +505,12 @@ ACHTUNG: wird ignori</string>
            </item>
            <item row="0" column="2">
             <widget class="QLabel" name="label_16">
+             <property name="minimumSize">
+              <size>
+               <width>50</width>
+               <height>0</height>
+              </size>
+             </property>
              <property name="maximumSize">
               <size>
                <width>20</width>

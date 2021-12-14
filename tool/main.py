@@ -170,23 +170,23 @@ class OTPMainWindow(QtCore.QObject):
 
         if ok:
             project = self.project_manager.create_project(project_name)
-            project_settings = ProjectSettings.features(project=project,
-                                                        create=True)
-            project_settings.add()
-            self.project_manager.active_project = project
-            self.ui.project_combo.addItem(project.name, project)
-            self.ui.project_combo.setCurrentIndex(
-                self.ui.project_combo.count() - 1)
+            ProjectSettings.features(project=project, create=True)
 
             job = ResetLayers(tables=[
-                Projektgebiet.get_table(create=True),
-                Baubloecke.get_table(create=True),
-                Gruenflaechen.get_table(create=True),
-                Adressen.get_table(create=True),
-                GruenflaechenEingaenge.get_table(create=True)
+                Projektgebiet.get_table(project=project, create=True),
+                Baubloecke.get_table(project=project, create=True),
+                Gruenflaechen.get_table(project=project, create=True),
+                Adressen.get_table(project=project, create=True),
+                GruenflaechenEingaenge.get_table(project=project, create=True)
             ])
-            dialog = ProgressDialog(job, parent=self.ui)
+            def on_success(x):
+                self.project_manager.active_project = project
+                self.ui.project_combo.addItem(project.name, project)
+                self.ui.project_combo.setCurrentIndex(
+                    self.ui.project_combo.count() - 1)
+            dialog = ProgressDialog(job, parent=self.ui, on_success=on_success)
             dialog.show()
+
 
     def create_router(self):
         graph_path = settings.graph_path
@@ -368,12 +368,17 @@ class OTPMainWindow(QtCore.QObject):
             self.ui.tabWidget.setEnabled(False)
             self.ui.start_calculation_button.setEnabled(False)
             return
+        self.project_manager.active_project = project
         try:
-            self.project_settings = ProjectSettings.features(project=project)[0]
-        except FileNotFoundError:
+            l_settings = ProjectSettings.features(project=project,
+                                                  create=True)
+            # no settings row yet -> create empty one (with defaults)
+            if len(l_settings) == 0:
+                l_settings.add()
+            self.project_settings = l_settings[0]
+        except (FileNotFoundError, IndexError):
             return
         self.ui.start_calculation_button.setEnabled(True)
-        self.project_manager.active_project = project
         # ToDo: load layers and settings
         try:
             self.apply_project_settings(project)
