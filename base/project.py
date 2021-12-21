@@ -341,8 +341,6 @@ class ProjectManager(metaclass=Singleton):
         target_folder = os.path.join(self.settings.project_path, name)
         project = Project(name)
         self._projects[project.name] = project
-        #shutil.copytree(os.path.join(settings.TEMPLATE_PATH, 'project'),
-                        #target_folder)
         if create_folder and not os.path.exists(target_folder):
             os.mkdir(target_folder)
         return project

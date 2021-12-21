@@ -29,7 +29,7 @@ import tempfile
 import webbrowser
 
 TITLE = "Grünflächenbewertung"
-DEFAULT_ROUTER = "Standardrouter Lichtenberg"
+DEFAULT_ROUTER = "Standardrouter_Lichtenberg"
 
 # how many results are written while running batch script
 PRINT_EVERY_N_LINES = 100
@@ -170,22 +170,13 @@ class OTPMainWindow(QtCore.QObject):
 
         if ok:
             project = self.project_manager.create_project(project_name)
-            ProjectSettings.features(project=project, create=True)
-
-            job = ResetLayers(tables=[
-                Projektgebiet.get_table(project=project, create=True),
-                Baubloecke.get_table(project=project, create=True),
-                Gruenflaechen.get_table(project=project, create=True),
-                Adressen.get_table(project=project, create=True),
-                GruenflaechenEingaenge.get_table(project=project, create=True)
-            ])
-            def on_success(x):
-                self.project_manager.active_project = project
-                self.ui.project_combo.addItem(project.name, project)
-                self.ui.project_combo.setCurrentIndex(
-                    self.ui.project_combo.count() - 1)
-            dialog = ProgressDialog(job, parent=self.ui, on_success=on_success)
-            dialog.show()
+            shutil.copyfile(
+                os.path.join(settings.TEMPLATE_PATH, 'data', 'project.gpkg'),
+                os.path.join(project.path, 'project.gpkg'))
+            self.project_manager.active_project = project
+            self.ui.project_combo.addItem(project.name, project)
+            self.ui.project_combo.setCurrentIndex(
+                self.ui.project_combo.count() - 1)
 
 
     def create_router(self):
@@ -580,21 +571,21 @@ class OTPMainWindow(QtCore.QObject):
         if not os.path.exists(otp_jar):
             msg_box = QtWidgets.QMessageBox(
                 QtWidgets.QMessageBox.Warning, "Fehler",
-                u'Die angegebene OTP Datei existiert nicht!')
+                u'Die in den Einstellungen angegebene OTP Datei existiert nicht!')
             msg_box.exec_()
             return
         jython_jar = settings.system['jython_jar_file']
         if not os.path.exists(jython_jar):
             msg_box = QtWidgets.QMessageBox(
                 QtWidgets.QMessageBox.Warning, "Fehler",
-                u'Der angegebene Jython Interpreter existiert nicht!')
+                u'Der in den Einstellungen angegebene Jython Interpreter existiert nicht!')
             msg_box.exec_()
             return
         java_executable = settings.system['java']
         if not os.path.exists(java_executable):
             msg_box = QtWidgets.QMessageBox(
                 QtWidgets.QMessageBox.Warning, "Fehler",
-                u'Der angegebene Java-Pfad existiert nicht!')
+                u'Der in den Einstellungen angegebene Java-Pfad existiert nicht!')
             msg_box.exec_()
             return
         self.prepare_routing()
@@ -716,7 +707,7 @@ class OTPMainWindow(QtCore.QObject):
         if not os.path.exists(otp_jar):
             msg_box = QtWidgets.QMessageBox(
                 QtWidgets.QMessageBox.Warning, "Fehler",
-                'Die angegebene OTP JAR Datei existiert nicht!')
+                'Die in den Einstellungen angegebene OTP JAR Datei existiert nicht!')
             msg_box.exec_()
             return
         if not os.path.exists(java_executable):

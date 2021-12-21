@@ -716,9 +716,11 @@ class GeopackageTable(Table):
         prev_where = self.where
         self.filter(**kwargs)
         i = 0
+        self._layer.StartTransaction()
         for feature in self._layer:
             self._layer.DeleteFeature(feature.GetFID())
             i += 1
+        self._layer.CommitTransaction()
         self.where = prev_where
         return i
 

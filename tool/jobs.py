@@ -137,9 +137,11 @@ class ResetLayers(Worker):
             base_table = self.project_manager.basedata.get_table(
                 table.name, workspace='project')
             fields = table.fields()
+            table._layer.StartTransaction()
             for feat in base_table.features():
                 attrs = dict((f.name, feat[f.name]) for f in fields)
                 table.add(geom=feat.geom, **attrs)
+            table._layer.CommitTransaction()
             self.set_progress((i+1) / len(self.tables) * 100)
 
 
