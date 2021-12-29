@@ -16,7 +16,7 @@ from gruenflaechenotp.tool.tables import (GruenflaechenEingaenge, Projektgebiet,
                                           GruenflaechenEingaengeProcessed,
                                           BaublockErgebnisse)
 
-DEBUG = False
+DEBUG = True
 EXPONENTIAL_FACTOR = -0.003
 
 class CloneProject(Worker):
@@ -162,7 +162,7 @@ class AnalyseRouting(Worker):
         df_addr_blocks = df_addresses.merge(df_blocks, how='left',
                                             left_on='baublock', right_on='fid')
         df_addr_blocks['block_count'] = (
-            df_addr_blocks.groupby('adresse')['baublock'].transform('count'))
+            df_addr_blocks.groupby('baublock')['baublock'].transform('count'))
         df_addr_blocks['ew_addr'] = (df_addr_blocks['einwohner'].astype(float) /
                                      df_addr_blocks['block_count'])
 
@@ -198,7 +198,7 @@ class AnalyseRouting(Worker):
                               df_merged['gruenflaeche'].notna()]
 
         df_merged['weighted_dist'] = df_merged['distance'].apply(
-            lambda x: np.exp(-0.003*x))
+            lambda x: np.exp(EXPONENTIAL_FACTOR * x))
         df_merged['attractivity'] = (df_merged['weighted_dist'] *
                                      df_merged['area'])
         df_merged['attractivity_sum'] = df_merged.groupby(
@@ -220,7 +220,8 @@ class AnalyseRouting(Worker):
             ppath = ProjectManager().active_project.path
             df_merged.to_csv(os.path.join(ppath, 'schritt_8.csv'), sep=';')
 
-        df_results_addr = df_merged.groupby('adresse').sum()
+        df_results_addr = df_merged.groupby(
+            ['adresse', 'ew_addr']).sum().reset_index()
         df_results_addr['space_used_addr'] = (
             df_results_addr['space_per_vis_weighted'] *
             df_results_addr['ew_addr'])
