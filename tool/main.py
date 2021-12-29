@@ -442,7 +442,7 @@ class OTPMainWindow(QtCore.QObject):
             addresses, groupname=groupname, prepend=True)
         self.results_output.draw(
             label='verfügbare Grünfläche je Einwohner je Baublock',
-            redraw=False)
+            redraw=False, read_only=True)
         self.set_result_categories()
 
     def set_result_categories(self):

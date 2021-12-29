@@ -643,7 +643,7 @@ class ProjectLayer(Layer):
 
     def draw(self, style_file: str = None, label: str = '', redraw: str = True,
              checked: bool = True, filter: str = None, expanded: bool = True,
-             read_only: bool = True, prepend: bool = False,
+             read_only: bool = False, prepend: bool = False,
              toggle_if_exists=False, uncheck_siblings: bool = False,
              ) -> QgsVectorLayer:
         '''

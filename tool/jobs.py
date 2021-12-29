@@ -16,7 +16,7 @@ from gruenflaechenotp.tool.tables import (GruenflaechenEingaenge, Projektgebiet,
                                           GruenflaechenEingaengeProcessed,
                                           BaublockErgebnisse)
 
-DEBUG = True
+DEBUG = False
 EXPONENTIAL_FACTOR = -0.003
 
 class CloneProject(Worker):
