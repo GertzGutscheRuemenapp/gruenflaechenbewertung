@@ -788,7 +788,7 @@ class GeopackageTable(Table):
             if isinstance(v, (np.integer, np.floating, float)):
                 return np.isnan(v)
             return v is None
-
+        self._layer.StartTransaction()
         for i, df_row in dataframe.iterrows():
             items = df_row.to_dict()
             if 'geom' in items and isnan(items['geom']):
@@ -821,6 +821,7 @@ class GeopackageTable(Table):
                     self.add(**items)
             else:
                 self.add(**items)
+        self._layer.CommitTransaction()
 
     def __len__(self) -> int:
         count = self._layer.GetFeatureCount()

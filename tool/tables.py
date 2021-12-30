@@ -35,6 +35,7 @@ class Adressen(ProjectTable):
 
 class Baubloecke(ProjectTable):
     einwohner = Field(int, 0)
+    im_projektgebiet = Field(bool, False)
 
     class Meta:
         workspace = 'project'
@@ -58,6 +59,8 @@ class GruenflaechenEingaenge(ProjectTable):
 class AdressenProcessed(ProjectTable):
     adresse = Field(int, 0)
     baublock = Field(int, 0)
+    einwohner = Field(float, 0)
+    in_projektgebiet = Field(bool, False)
 
     class Meta:
         workspace = 'results'
@@ -82,7 +85,7 @@ class ProjektgebietProcessed(ProjectTable):
 
 class AdressErgebnisse(ProjectTable):
     gruenflaeche_je_einwohner = Field(float, 0)
-    einwohner = Field(int, 0)
+    einwohner = Field(float, 0)
     adresse = Field(int, 0)
 
     class Meta:

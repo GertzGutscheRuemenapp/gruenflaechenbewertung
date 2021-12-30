@@ -5,7 +5,7 @@ from qgis import utils
 from qgis._core import QgsCoordinateReferenceSystem
 from qgis.core import (QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel,
                        QgsSymbol, QgsSimpleFillSymbolLayer, QgsStyle,
-                       QgsRuleBasedRenderer)
+                       QgsRendererRange, QgsGraduatedSymbolRenderer)
 import shutil
 
 from gruenflaechenotp.base.project import (ProjectManager, settings,
@@ -83,8 +83,14 @@ class OTPMainWindow(QtCore.QObject):
 
         self.ui.required_green_edit.valueChanged.connect(
             lambda x: save_project_setting('required_green', x))
-        self.ui.required_green_edit.valueChanged.connect(
-            self.set_result_categories)
+
+        def update_cat(x):
+            if self.adress_results_output:
+                self.set_result_categories(self.adress_results_output.layer)
+            if self.block_results_output:
+                self.set_result_categories(self.block_results_output.layer)
+
+        self.ui.required_green_edit.valueChanged.connect(update_cat)
         self.ui.max_walk_dist_edit.valueChanged.connect(
             lambda x: save_project_setting('max_walk_dist', x))
         self.ui.project_buffer_edit.valueChanged.connect(
@@ -395,21 +401,13 @@ class OTPMainWindow(QtCore.QObject):
     def add_foreground_inputs(self):
         groupname = 'Eingangsdaten (Vordergrund)'
 
-        addresses = Adressen.get_table(create=True)
-        self.addr_output = ProjectLayer.from_table(
-            addresses, groupname=groupname)
-        self.addr_output.draw(
-            label='Adressen',
-            style_file='adressen.qml',
-            prepend=True,
-            redraw=False)
-
         green_entrances = GruenflaechenEingaenge.get_table(create=True)
         self.green_entrances_output = ProjectLayer.from_table(
             green_entrances, groupname=groupname)
         self.green_entrances_output.draw(
             label='Grünflächen Eingänge',
             style_file='gruen_eingaenge.qml',
+            prepend=True,
             redraw=False)
 
         green = Gruenflaechen.get_table(create=True)
@@ -422,6 +420,14 @@ class OTPMainWindow(QtCore.QObject):
 
     def add_background_inputs(self):
         groupname = 'Eingangsdaten (Hintergrund)'
+
+        addresses = Adressen.get_table(create=True)
+        self.addr_output = ProjectLayer.from_table(
+            addresses, groupname=groupname)
+        self.addr_output.draw(
+            label='Adressen',
+            style_file='adressen.qml',
+            redraw=False)
 
         blocks = Baubloecke.get_table(create=True)
         self.blocks_output = ProjectLayer.from_table(
@@ -442,29 +448,26 @@ class OTPMainWindow(QtCore.QObject):
     def add_result_layers(self):
         groupname = 'Ergebnisse'
 
-        block_results = BaublockErgebnisse.get_table(create=True)
-        self.block_results_output = ProjectLayer.from_table(
-            block_results, groupname=groupname, prepend=True)
-        self.block_results_output.draw(
-            label='verfügbare Grünfläche je Einwohner je Baublock',
-            redraw=False, read_only=True)
-
         adress_results = AdressErgebnisse.get_table(create=True)
         self.adress_results_output = ProjectLayer.from_table(
             adress_results, groupname=groupname, prepend=True)
         self.adress_results_output.draw(
             label='verfügbare Grünfläche je Einwohner je Adresse',
-            redraw=False, read_only=True, checked=False)
+            redraw=False, read_only=True, checked=False,
+            filter='"einwohner" > 0')
 
-        self.set_result_categories()
+        block_results = BaublockErgebnisse.get_table(create=True)
+        self.block_results_output = ProjectLayer.from_table(
+            block_results, groupname=groupname, prepend=True)
+        self.block_results_output.draw(
+            label='verfügbare Grünfläche je Einwohner je Baublock',
+            redraw=False, read_only=True, filter='"einwohner" > 0')
+        self.set_result_categories(self.adress_results_output.layer)
+        self.set_result_categories(self.block_results_output.layer)
 
-    def set_result_categories(self):
-        def interpolate(start: float, end: float, step: float, n_steps: float) -> float:
-            ''' interpolate a value between start and end value '''
-            return (end - start) * step / n_steps + start
-        if not self.block_results_output:
+    def set_result_categories(self, layer):
+        if not layer:
             return
-        layer = self.block_results_output.layer
         step = 2
         b_point = self.project_settings.required_green
         b = round(b_point / step)
@@ -474,16 +477,7 @@ class OTPMainWindow(QtCore.QObject):
         bins.append((b_point, 500000))
 
         geometry_type = layer.geometryType()
-        field = 'gruenflaeche_je_einwohner'
-
-        start_color = (166, 97, 26)
-        end_color = (1, 133, 113)
-
-        root_rule = QgsRuleBasedRenderer.Rule(
-            QgsSymbol.defaultSymbol(geometry_type))
-        style = QgsStyle().defaultStyle()
-        ramp = style.colorRamp('BrBg')
-        renderer.updateColorRamp(ramp)
+        categories = []
 
         for i, (lower, upper) in enumerate(bins):
             if (i == 0):
@@ -495,14 +489,7 @@ class OTPMainWindow(QtCore.QObject):
 
             symbol = QgsSymbol.defaultSymbol(geometry_type)
 
-            # configure a symbol layer
-            layer_style = {}
-            rgb = []
-            for c in range(3):
-                rgb.append(str(int(interpolate(start_color[c], end_color[c],
-                                               i, len(bins)))))
-            layer_style['color'] = ','.join(rgb)
-            symbol_layer = QgsSimpleFillSymbolLayer.create(layer_style)
+            symbol_layer = QgsSimpleFillSymbolLayer.create()
             symbol_layer.setStrokeColor(QtGui.QColor(255, 255, 255, 0))
             symbol_layer.setStrokeStyle(QtCore.Qt.PenStyle(QtCore.Qt.NoPen))
 
@@ -511,25 +498,18 @@ class OTPMainWindow(QtCore.QObject):
                 symbol.changeSymbolLayer(0, symbol_layer)
 
             label = f'{label}m²'
-            expression = f'"{field}" >= {lower} AND "{field}" <= {upper}'
-            rule = QgsRuleBasedRenderer.Rule(symbol, label=label,
-                                             filterExp=expression)
-            root_rule.appendChild(rule)
-
-
-        expression = '"einwohner" = 0'
-        symbol = QgsSymbol.defaultSymbol(geometry_type)
-        layer_style['color'] = '175, 175, 175'
-        label = f'keine Einwohner'
-        symbol_layer = QgsSimpleFillSymbolLayer.create(layer_style)
-        symbol_layer.setStrokeColor(QtGui.QColor(255, 255, 255, 0))
-        symbol.changeSymbolLayer(0, symbol_layer)
-        rule = QgsRuleBasedRenderer.Rule(symbol, label=label,
-                                         filterExp=expression)
-        root_rule.appendChild(rule)
+            # create renderer object
+            category = QgsRendererRange(lower, upper, symbol, label)
+            # entry for the list of category items
+            categories.append(category)
 
         # create renderer object
-        renderer = QgsRuleBasedRenderer(root_rule)
+        renderer = QgsGraduatedSymbolRenderer('gruenflaeche_je_einwohner',
+                                              categories)
+        style = QgsStyle().defaultStyle()
+        ramp = style.colorRamp('BrBG')
+        renderer.updateColorRamp(ramp)
+
         layer.setRenderer(renderer)
 
     def apply_project_settings(self, project):

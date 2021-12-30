@@ -158,13 +158,10 @@ class AnalyseRouting(Worker):
 
         project_settings = ProjectSettings.features()[0]
         df_addresses = AdressenProcessed.features().to_pandas()
+        df_addresses = df_addresses.rename(columns={'einwohner': 'ew_addr'})
         df_blocks = Baubloecke.features().to_pandas()
         df_addr_blocks = df_addresses.merge(df_blocks, how='left',
                                             left_on='baublock', right_on='fid')
-        df_addr_blocks['block_count'] = (
-            df_addr_blocks.groupby('baublock')['baublock'].transform('count'))
-        df_addr_blocks['ew_addr'] = (df_addr_blocks['einwohner'].astype(float) /
-                                     df_addr_blocks['block_count'])
 
         green_spaces = Gruenflaechen.features()
         area_data = []
@@ -226,7 +223,8 @@ class AnalyseRouting(Worker):
             df_results_addr['space_per_vis_weighted'] *
             df_results_addr['ew_addr'])
         df_results_addr = df_results_addr.reset_index()[
-            ['adresse','space_used_addr', 'ew_addr', 'space_per_vis_weighted']]
+            ['adresse','space_used_addr', 'ew_addr', 'space_per_vis_weighted',
+             'in_projektgebiet']]
 
         if DEBUG:
             df_results_addr.to_csv(os.path.join(ppath, 'schritt_11.csv'),
@@ -237,8 +235,6 @@ class AnalyseRouting(Worker):
         df_results_block = df_results_block.drop(columns=['fid'])
         df_results_block = df_results_block.groupby(
             'baublock').sum().reset_index()
-
-        # ToDo: only blocks in project area!!
 
         df_results_block = df_blocks.merge(df_results_block, how='left',
                                            left_on='fid', right_on='baublock')
@@ -257,10 +253,14 @@ class AnalyseRouting(Worker):
 
         self.log('Schreibe Ergebnisse...')
 
+        df_addresses_in_project = df_addresses[
+            df_addresses['in_projektgebiet'] == True]
+
         AdressErgebnisse.remove()
         results_addr = AdressErgebnisse.features(create=True)
-        df_results_addr = df_addresses.merge(df_results_addr, how='left',
-                                             on='adresse')
+        df_results_addr = df_results_addr.drop(columns=['ew_addr'])
+        df_results_addr = df_addresses_in_project.merge(
+            df_results_addr, how='left', on='adresse')
         df_results_addr = df_results_addr.fillna(0)
 
         results_addr.table._layer.StartTransaction()
@@ -271,9 +271,12 @@ class AnalyseRouting(Worker):
         results_addr.table._layer.CommitTransaction()
 
         BaublockErgebnisse.remove()
+        blocks_in_pa = df_addresses_in_project['baublock'].unique()
+        df_results_block_in_pa = df_results_block[
+            df_results_block['fid'].isin(blocks_in_pa)]
         results_block = BaublockErgebnisse.features(create=True)
         results_block.table._layer.StartTransaction()
-        for index, row in df_results_block.iterrows():
+        for index, row in df_results_block_in_pa.iterrows():
             results_block.add(baublock=row['fid'], einwohner=row['einwohner'],
                               gruenflaeche_je_einwohner=row['space_per_inh'],
                               geom=row['geom'])
@@ -287,6 +290,7 @@ class PrepareRouting(Worker):
         entrances_layer = GruenflaechenEingaenge.as_layer()
         address_layer = Adressen.as_layer()
         block_layer = Baubloecke.as_layer()
+        df_blocks = Baubloecke.features().to_pandas(columns=['fid', 'einwohner'])
         green_spaces_layer = Gruenflaechen.as_layer()
         AdressenProcessed.remove()
         GruenflaechenEingaengeProcessed.remove()
@@ -305,20 +309,27 @@ class PrepareRouting(Worker):
                       'INPUT_FIELDS': ['fid'],
                       'OVERLAY': project_layer_buffered,
                       'OUTPUT':'memory:'}
-        addr_in_pa_layer = processing.run(
+        addr_in_buffer_layer = processing.run(
+            'native:intersection', parameters)['OUTPUT']
+
+        parameters = {'INPUT': address_layer,
+                      'INPUT_FIELDS': ['fid'],
+                      'OVERLAY': Projektgebiet.as_layer(),
+                      'OUTPUT':'memory:'}
+        addr_in_project_layer = processing.run(
             'native:intersection', parameters)['OUTPUT']
 
         parameters = {'INPUT': entrances_layer,
                       'OVERLAY': project_layer_buffered,
                       'OVERLAY_FIELDS_PREFIX': 'green_',
                       'OUTPUT':'memory:'}
-        ent_in_pa_layer = processing.run(
+        ent_in_buffer_layer = processing.run(
             'native:intersection', parameters)['OUTPUT']
         self.set_progress(15)
 
         self.log('Ordne Adressen den Baublöcken zu...')
 
-        parameters = {'INPUT': addr_in_pa_layer,
+        parameters = {'INPUT': addr_in_buffer_layer,
                       'INPUT_FIELDS': ['fid'],
                       'OVERLAY': block_layer,
                       'OVERLAY_FIELDS_PREFIX': 'block_',
@@ -328,14 +339,35 @@ class PrepareRouting(Worker):
             'native:intersection', parameters)['OUTPUT']
         self.set_progress(30)
 
-        proc_addresses = AdressenProcessed.features(create=True)
+        in_project = []
+        for feat in addr_in_project_layer.getFeatures():
+            in_project.append(feat.attribute('fid'))
+
+        rows = []
         for feat in addr_block_layer.getFeatures():
             # intersection turns the points into multipoints whyever
             geom = feat.geometry().asGeometryCollection()[0]
-            proc_addresses.add(adresse=feat.attribute('fid'), geom=geom,
-                               baublock=feat.attribute('block_fid'))
+            rows.append(
+                [feat.attribute('fid'), feat.attribute('block_fid'), geom])
 
-        missing = (addr_in_pa_layer.featureCount() -
+        df_blocks = df_blocks.rename(columns={'einwohner': 'einwohner_block'})
+        df_addresses = pd.DataFrame(
+            data=rows, columns=['adresse', 'baublock', 'geom'])
+        df_addresses = df_addresses.merge(
+            df_blocks, left_on='baublock', right_on='fid')
+        df_addresses['in_projektgebiet'] = False
+        df_addresses['in_projektgebiet'][
+            df_addresses['adresse'].isin(in_project)] = True
+
+        df_addresses['block_count'] = (
+            df_addresses.groupby('baublock')['baublock'].transform('count'))
+        df_addresses['einwohner'] = (df_addresses['einwohner_block'].astype(float) /
+                                     df_addresses['block_count'])
+        df_addresses.drop(columns=['fid'], inplace=True)
+        proc_addresses = AdressenProcessed.features(create=True)
+        proc_addresses.update_pandas(df_addresses)
+
+        missing = (addr_in_buffer_layer.featureCount() -
                    addr_block_layer.featureCount())
         if missing:
             self.log(f'{missing} Adressen konnten keinem Baublock '
@@ -350,7 +382,7 @@ class PrepareRouting(Worker):
         missing = 0
         max_ent_dist = 100
         proc_entrances = GruenflaechenEingaengeProcessed.features(create=True)
-        for feat in ent_in_pa_layer.getFeatures():
+        for feat in ent_in_buffer_layer.getFeatures():
             # multipoint to point
             geom = feat.geometry().asGeometryCollection()[0]
             nearest = green_index.nearestNeighbor(geom, 1,
