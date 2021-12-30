@@ -358,7 +358,7 @@ class OTPMainWindow(QtCore.QObject):
             graph_path = settings.graph_path
             router_path = os.path.join(graph_path, router)
             shutil.rmtree(router_path)
-            self.ui.router_combo.setCurrentIndex(0)
+            self.setup_routers()
 
     def change_project(self, project):
         if not project:
@@ -399,7 +399,7 @@ class OTPMainWindow(QtCore.QObject):
         backgroundOSM.draw()
 
     def add_foreground_inputs(self):
-        groupname = 'Eingangsdaten (Vordergrund)'
+        groupname = 'Eingangsdaten (Grünflächen)'
 
         green_entrances = GruenflaechenEingaenge.get_table(create=True)
         self.green_entrances_output = ProjectLayer.from_table(
@@ -419,7 +419,7 @@ class OTPMainWindow(QtCore.QObject):
             redraw=False)
 
     def add_background_inputs(self):
-        groupname = 'Eingangsdaten (Hintergrund)'
+        groupname = 'Eingangsdaten (Wohnen)'
 
         addresses = Adressen.get_table(create=True)
         self.addr_output = ProjectLayer.from_table(
@@ -531,6 +531,7 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.router_combo.blockSignals(True)
         self.ui.router_combo.clear()
         idx = 0
+        current_found = False
         graph_path = settings.graph_path
         if not graph_path:
             self.ui.router_combo.addItem(
@@ -554,14 +555,18 @@ class OTPMainWindow(QtCore.QObject):
                         self.ui.router_combo.addItem(subdir)
                         if current_router and current_router == subdir:
                             idx = i
+                            current_found = True
             self.ui.router_combo.setEnabled(True)
             self.ui.create_router_button.setEnabled(True)
         self.ui.router_combo.setCurrentIndex(idx)
         self.ui.router_combo.blockSignals(False)
+        if current_router and not current_found:
+            current_router = None
         if not current_router:
             current_router = self.ui.router_combo.currentText()
             self.project_settings.router = current_router
             self.project_settings.save()
+
         self.ui.remove_router_button.setEnabled(
             current_router != DEFAULT_ROUTER)
         self.ui.build_router_button.setEnabled(

@@ -128,6 +128,7 @@ class NewProjectDialog(Dialog):
         layout.addWidget(self.name_edit)
 
         self.status_label = QtWidgets.QLabel()
+        self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
         #spacer = QtWidgets.QSpacerItem(
@@ -159,12 +160,11 @@ class NewProjectDialog(Dialog):
             error = True
         elif name in self.excluded_names:
             status_text = (
-                f'Ein Ordner mit dem Namen {name} existiert bereits!\n'
+                f'Ein Projekt mit dem Namen {name} existiert bereits!\n'
                 'Die Namen müssen einzigartig sein.')
             error = True
 
         self.status_label.setText(status_text)
-
         self.ok_button.setEnabled(not error and len(name) > 0)
 
     def show(self):
@@ -181,7 +181,31 @@ class NewRouterDialog(NewProjectDialog):
     def setupUi(self):
         super().setupUi()
         self.setWindowTitle('Neuen Router erstellen')
+        self.setMinimumSize(400, 200)
         self.label.setText('Name des Routers')
+
+    def validate(self):
+        '''
+        validate current input of name and layer, set the status label according
+        to validation result
+        '''
+        name = str(self.name_edit.text())
+        status_text = ''
+        regexp = re.compile('[ äüöÄÜÖß\\\/\:*?\"\'<>|]')
+        error = False
+        if name and regexp.search(name):
+            status_text = ('Der Name darf keine Freizeichen, keine Umlaute '
+                           'und keines der folgenden Zeichen enthalten: '
+                           '\/:*?"\'<>|')
+            error = True
+        elif name in self.excluded_names:
+            status_text = (
+                f'Ein Router mit dem Namen {name} existiert bereits!\n'
+                'Die Namen müssen einzigartig sein.')
+            error = True
+
+        self.status_label.setText(status_text)
+        self.ok_button.setEnabled(not error and len(name) > 0)
 
 
 class ImportLayerDialog(Dialog):
@@ -348,7 +372,13 @@ class ExecOTPDialog(ProgressDialog):
             out = self.process.readAllStandardOutput()
             out = str(out.data(), encoding='utf-8')
             err = self.process.readAllStandardError()
-            err = str(err.data(), encoding='utf-8')
+            try:
+                err = str(err.data(), encoding='utf-8')
+            except UnicodeDecodeError:
+                try:
+                    str(err.data(), encoding='ISO-8859-1')
+                except:
+                    err = ''
             if len(out):
                 self.show_status(out)
                 if tick_indicator in out and n_ticks:
