@@ -154,7 +154,7 @@ class AnalyseRouting(Worker):
     def work(self):
         self.log('<br><b>Analyse der Ergebnisse des Routings</b><br>')
 
-        self.log('Lese Eingangsdaten...')
+        self.log('Lese Ergebnisse des Routings...')
 
         project_settings = ProjectSettings.features()[0]
         df_addresses = AdressenProcessed.features().to_pandas()
