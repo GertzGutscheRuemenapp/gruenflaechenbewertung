@@ -80,6 +80,16 @@ class ProjektgebietProcessed(ProjectTable):
         geom = 'MultiPolygon'
 
 
+class AdressErgebnisse(ProjectTable):
+    gruenflaeche_je_einwohner = Field(float, 0)
+    einwohner = Field(int, 0)
+    adresse = Field(int, 0)
+
+    class Meta:
+        workspace = 'results'
+        geom = 'Point'
+
+
 class BaublockErgebnisse(ProjectTable):
     gruenflaeche_je_einwohner = Field(float, 0)
     einwohner = Field(int, 0)

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 '''
 ***************************************************************************
     project.py
@@ -700,7 +701,7 @@ class ProjectLayer(Layer):
 
     @classmethod
     def from_table(cls, table: Table, groupname: str = '', prepend: bool = True
-                   ) -> 'ProjectLayer':
+                   ) -> ProjectLayer:
         '''
         create a layer with table data as a source
 

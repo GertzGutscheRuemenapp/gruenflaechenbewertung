@@ -14,7 +14,7 @@ from gruenflaechenotp.tool.tables import (GruenflaechenEingaenge, Projektgebiet,
                                           ProjectSettings, Adressen,
                                           ProjektgebietProcessed, Gruenflaechen,
                                           GruenflaechenEingaengeProcessed,
-                                          BaublockErgebnisse)
+                                          BaublockErgebnisse, AdressErgebnisse)
 
 DEBUG = False
 EXPONENTIAL_FACTOR = -0.003
@@ -257,12 +257,27 @@ class AnalyseRouting(Worker):
 
         self.log('Schreibe Ergebnisse...')
 
+        AdressErgebnisse.remove()
+        results_addr = AdressErgebnisse.features(create=True)
+        df_results_addr = df_addresses.merge(df_results_addr, how='left',
+                                             on='adresse')
+        df_results_addr = df_results_addr.fillna(0)
+
+        results_addr.table._layer.StartTransaction()
+        for index, row in df_results_addr.iterrows():
+            results_addr.add(adresse=row['adresse'], einwohner=row['ew_addr'],
+                             gruenflaeche_je_einwohner=
+                             row['space_per_vis_weighted'], geom=row['geom'])
+        results_addr.table._layer.CommitTransaction()
+
         BaublockErgebnisse.remove()
-        results = BaublockErgebnisse.features(create=True)
+        results_block = BaublockErgebnisse.features(create=True)
+        results_block.table._layer.StartTransaction()
         for index, row in df_results_block.iterrows():
-            results.add(baublock=row['fid'], einwohner=row['einwohner'],
-                        gruenflaeche_je_einwohner=row['space_per_inh'],
-                        geom=row['geom'])
+            results_block.add(baublock=row['fid'], einwohner=row['einwohner'],
+                              gruenflaeche_je_einwohner=row['space_per_inh'],
+                              geom=row['geom'])
+        results_block.table._layer.CommitTransaction()
 
 
 class PrepareRouting(Worker):

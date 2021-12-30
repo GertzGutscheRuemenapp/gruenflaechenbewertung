@@ -1,10 +1,10 @@
 import os
 import math
-from PyQt5 import uic,  QtCore, QtWidgets
+from PyQt5 import uic, QtCore, QtWidgets, QtGui
 from qgis import utils
 from qgis._core import QgsCoordinateReferenceSystem
 from qgis.core import (QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel,
-                       QgsSymbol, QgsSimpleFillSymbolLayer,
+                       QgsSymbol, QgsSimpleFillSymbolLayer, QgsStyle,
                        QgsRuleBasedRenderer)
 import shutil
 
@@ -18,7 +18,7 @@ from gruenflaechenotp.base.database import Workspace
 from gruenflaechenotp.tool.tables import (
     ProjectSettings, Projektgebiet, Adressen, Baubloecke, Gruenflaechen,
     GruenflaechenEingaenge, AdressenProcessed, GruenflaechenEingaengeProcessed,
-    BaublockErgebnisse
+    BaublockErgebnisse, AdressErgebnisse
 )
 from gruenflaechenotp.base.dialogs import ProgressDialog
 from gruenflaechenotp.tool.jobs import (CloneProject, ImportLayer, ResetLayers,
@@ -45,7 +45,7 @@ class OTPMainWindow(QtCore.QObject):
         uic.loadUi(main_form, self.ui)
         self.project_manager = ProjectManager()
         self.project_settings = None
-        self.results_output = None
+        self.block_results_output = None
         self.canvas = utils.iface.mapCanvas()
         #project = QgsProject.instance()
         #crs = QgsCoordinateReferenceSystem(f'epsg:{settings.EPSG}')
@@ -385,14 +385,15 @@ class OTPMainWindow(QtCore.QObject):
                 group.setItemVisibilityChecked(
                     p.groupname==project.groupname)
 
-        self.add_input_layers()
+        self.add_background_inputs()
         self.add_result_layers()
+        self.add_foreground_inputs()
 
         backgroundOSM = OSMBackgroundLayer(groupname='Hintergrundkarten')
         backgroundOSM.draw()
 
-    def add_input_layers(self):
-        groupname = 'Eingangsdaten'
+    def add_foreground_inputs(self):
+        groupname = 'Eingangsdaten (Vordergrund)'
 
         addresses = Adressen.get_table(create=True)
         self.addr_output = ProjectLayer.from_table(
@@ -400,6 +401,7 @@ class OTPMainWindow(QtCore.QObject):
         self.addr_output.draw(
             label='Adressen',
             style_file='adressen.qml',
+            prepend=True,
             redraw=False)
 
         green_entrances = GruenflaechenEingaenge.get_table(create=True)
@@ -417,6 +419,9 @@ class OTPMainWindow(QtCore.QObject):
             label='Grünflächen',
             style_file='gruenflaechen.qml',
             redraw=False)
+
+    def add_background_inputs(self):
+        groupname = 'Eingangsdaten (Hintergrund)'
 
         blocks = Baubloecke.get_table(create=True)
         self.blocks_output = ProjectLayer.from_table(
@@ -437,21 +442,29 @@ class OTPMainWindow(QtCore.QObject):
     def add_result_layers(self):
         groupname = 'Ergebnisse'
 
-        addresses = BaublockErgebnisse.get_table(create=True)
-        self.results_output = ProjectLayer.from_table(
-            addresses, groupname=groupname, prepend=True)
-        self.results_output.draw(
+        block_results = BaublockErgebnisse.get_table(create=True)
+        self.block_results_output = ProjectLayer.from_table(
+            block_results, groupname=groupname, prepend=True)
+        self.block_results_output.draw(
             label='verfügbare Grünfläche je Einwohner je Baublock',
             redraw=False, read_only=True)
+
+        adress_results = AdressErgebnisse.get_table(create=True)
+        self.adress_results_output = ProjectLayer.from_table(
+            adress_results, groupname=groupname, prepend=True)
+        self.adress_results_output.draw(
+            label='verfügbare Grünfläche je Einwohner je Adresse',
+            redraw=False, read_only=True, checked=False)
+
         self.set_result_categories()
 
     def set_result_categories(self):
         def interpolate(start: float, end: float, step: float, n_steps: float) -> float:
             ''' interpolate a value between start and end value '''
             return (end - start) * step / n_steps + start
-        if not self.results_output:
+        if not self.block_results_output:
             return
-        layer = self.results_output.layer
+        layer = self.block_results_output.layer
         step = 2
         b_point = self.project_settings.required_green
         b = round(b_point / step)
@@ -468,6 +481,9 @@ class OTPMainWindow(QtCore.QObject):
 
         root_rule = QgsRuleBasedRenderer.Rule(
             QgsSymbol.defaultSymbol(geometry_type))
+        style = QgsStyle().defaultStyle()
+        ramp = style.colorRamp('BrBg')
+        renderer.updateColorRamp(ramp)
 
         for i, (lower, upper) in enumerate(bins):
             if (i == 0):
@@ -487,6 +503,8 @@ class OTPMainWindow(QtCore.QObject):
                                                i, len(bins)))))
             layer_style['color'] = ','.join(rgb)
             symbol_layer = QgsSimpleFillSymbolLayer.create(layer_style)
+            symbol_layer.setStrokeColor(QtGui.QColor(255, 255, 255, 0))
+            symbol_layer.setStrokeStyle(QtCore.Qt.PenStyle(QtCore.Qt.NoPen))
 
             # replace default symbol layer with the configured one
             if symbol_layer is not None:
@@ -504,6 +522,7 @@ class OTPMainWindow(QtCore.QObject):
         layer_style['color'] = '175, 175, 175'
         label = f'keine Einwohner'
         symbol_layer = QgsSimpleFillSymbolLayer.create(layer_style)
+        symbol_layer.setStrokeColor(QtGui.QColor(255, 255, 255, 0))
         symbol.changeSymbolLayer(0, symbol_layer)
         rule = QgsRuleBasedRenderer.Rule(symbol, label=label,
                                          filterExp=expression)
@@ -514,7 +533,9 @@ class OTPMainWindow(QtCore.QObject):
         layer.setRenderer(renderer)
 
     def apply_project_settings(self, project):
+        self.ui.required_green_edit.blockSignals(True)
         self.ui.required_green_edit.setValue(self.project_settings.required_green)
+        self.ui.required_green_edit.blockSignals(False)
         self.ui.max_walk_dist_edit.setValue(self.project_settings.max_walk_dist)
         self.ui.project_buffer_edit.setValue(self.project_settings.project_buffer)
 
@@ -614,7 +635,6 @@ class OTPMainWindow(QtCore.QObject):
         java_executable = settings.system['java']
         memory = settings.system['reserved']
 
-        self.add_input_layers() # reload to make sure they are there
         origin_layer = GruenflaechenEingaengeProcessed.as_layer()
         destination_layer = AdressenProcessed.as_layer()
         wgs84 = QgsCoordinateReferenceSystem(4326)
