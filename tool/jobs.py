@@ -19,6 +19,26 @@ from gruenflaechenotp.tool.tables import (GruenflaechenEingaenge, Projektgebiet,
 DEBUG = False
 EXPONENTIAL_FACTOR = -0.003
 
+
+class CreateProject(Worker):
+    '''
+    worker for cloning a project
+    '''
+    def __init__(self, project_name, parent=None):
+        super().__init__(parent=parent)
+        self.project_name = project_name
+        self.project_manager = ProjectManager()
+
+    def work(self):
+        project = self.project_manager.create_project(self.project_name)
+        self.log('Kopiere Standarddaten...')
+        shutil.copyfile(
+            os.path.join(settings.TEMPLATE_PATH, 'data', 'project.gpkg'),
+            os.path.join(project.path, 'project.gpkg'))
+        self.log(f'Neues Projekt erfolgreich angelegt unter {project.path}')
+        return project
+
+
 class CloneProject(Worker):
     '''
     worker for cloning a project
@@ -30,7 +50,6 @@ class CloneProject(Worker):
         self.project_manager = ProjectManager()
 
     def work(self):
-
         cloned_project = self.project_manager.create_project(
             self.project_name, create_folder=False)
         self.log('Kopiere Projektordner...')

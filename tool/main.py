@@ -22,7 +22,8 @@ from gruenflaechenotp.tool.tables import (
 )
 from gruenflaechenotp.base.dialogs import ProgressDialog
 from gruenflaechenotp.tool.jobs import (CloneProject, ImportLayer, ResetLayers,
-                                        AnalyseRouting, PrepareRouting)
+                                        AnalyseRouting, PrepareRouting,
+                                        CreateProject)
 from gruenflaechenotp.batch.config import Config as OTPConfig
 
 import tempfile
@@ -42,6 +43,7 @@ class OTPMainWindow(QtCore.QObject):
         super().__init__(parent)
 
         self.ui = QtWidgets.QMainWindow()
+        #self.ui.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
         uic.loadUi(main_form, self.ui)
         self.project_manager = ProjectManager()
         self.project_settings = None
@@ -175,15 +177,14 @@ class OTPMainWindow(QtCore.QObject):
         ok, project_name = dialog.show()
 
         if ok:
-            project = self.project_manager.create_project(project_name)
-            shutil.copyfile(
-                os.path.join(settings.TEMPLATE_PATH, 'data', 'project.gpkg'),
-                os.path.join(project.path, 'project.gpkg'))
-            self.project_manager.active_project = project
-            self.ui.project_combo.addItem(project.name, project)
-            self.ui.project_combo.setCurrentIndex(
-                self.ui.project_combo.count() - 1)
-
+            job = CreateProject(project_name, parent=self.ui)
+            def on_success(project):
+                self.project_manager.active_project = project
+                self.ui.project_combo.addItem(project.name, project)
+                self.ui.project_combo.setCurrentIndex(
+                    self.ui.project_combo.count() - 1)
+            dialog = ProgressDialog(job, parent=self.ui, on_success=on_success)
+            dialog.show()
 
     def create_router(self):
         graph_path = settings.graph_path
@@ -508,6 +509,7 @@ class OTPMainWindow(QtCore.QObject):
                                               categories)
         style = QgsStyle().defaultStyle()
         ramp = style.colorRamp('BrBG')
+        #ramp = style.colorRamp('RdYlGn')
         renderer.updateColorRamp(ramp)
 
         layer.setRenderer(renderer)

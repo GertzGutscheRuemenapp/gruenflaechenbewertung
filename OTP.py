@@ -66,5 +66,7 @@ class OTP(object):
             self.main_window = OTPMainWindow()
 
         self.main_window.show()
+        # bring window on top
+        self.main_window.ui.activateWindow()
 
 
