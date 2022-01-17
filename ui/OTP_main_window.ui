@@ -162,7 +162,7 @@
     <item row="7" column="0">
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="tab_2">
        <attribute name="title">
@@ -410,6 +410,54 @@ ACHTUNG: wird ignori</string>
            <string>Router</string>
           </property>
           <layout class="QGridLayout" name="gridLayout_13">
+           <item row="0" column="0">
+            <widget class="QComboBox" name="router_combo">
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>0</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="0">
+            <layout class="QHBoxLayout" name="horizontalLayout_3">
+             <item>
+              <widget class="QPushButton" name="build_router_button">
+               <property name="text">
+                <string>Neu bauen</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer_10">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="open_router_button">
+               <property name="text">
+                <string>Ordner öffnen</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="open_josm_button">
+               <property name="text">
+                <string>in JOSM öffnen</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
            <item row="1" column="0">
             <layout class="QHBoxLayout" name="horizontalLayout">
              <item>
@@ -433,20 +481,6 @@ ACHTUNG: wird ignori</string>
               </spacer>
              </item>
              <item>
-              <widget class="QPushButton" name="open_router_button">
-               <property name="text">
-                <string>Ordner öffnen</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QPushButton" name="build_router_button">
-               <property name="text">
-                <string>Neu bauen</string>
-               </property>
-              </widget>
-             </item>
-             <item>
               <widget class="QPushButton" name="remove_router_button">
                <property name="maximumSize">
                 <size>
@@ -460,16 +494,6 @@ ACHTUNG: wird ignori</string>
               </widget>
              </item>
             </layout>
-           </item>
-           <item row="0" column="0">
-            <widget class="QComboBox" name="router_combo">
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>0</height>
-              </size>
-             </property>
-            </widget>
            </item>
           </layout>
          </widget>

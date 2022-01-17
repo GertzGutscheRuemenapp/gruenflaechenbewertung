@@ -1,5 +1,6 @@
 import os
 import math
+import subprocess
 from PyQt5 import uic, QtCore, QtWidgets, QtGui
 from qgis import utils
 from qgis._core import QgsCoordinateReferenceSystem
@@ -9,6 +10,7 @@ from qgis.core import (QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel,
 import shutil
 
 from gruenflaechenotp.base.project import (ProjectManager, settings,
+                                           DEFAULT_JOSM_JAR,
                                            ProjectLayer, OSMBackgroundLayer)
 from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, InfoDialog,
                                            SettingsDialog, NewProjectDialog,
@@ -119,6 +121,8 @@ class OTPMainWindow(QtCore.QObject):
             router_path = os.path.join(settings.graph_path,
                                        self.project_settings.router)
             os.startfile(router_path)
+        self.ui.open_josm_button.clicked.connect(self.open_josm)
+
         self.ui.open_router_button.clicked.connect(open_current_router)
         self.ui.build_router_button.clicked.connect(self.build_router)
 
@@ -200,6 +204,19 @@ class OTPMainWindow(QtCore.QObject):
             self.project_settings.router = router_name
             self.project_settings.save()
             self.setup_routers()
+
+    def open_josm(self):
+        graph_path = os.path.join(settings.graph_path,
+                                  self.project_settings.router)
+        java_executable = settings.system['java']
+        cmd = f'"{java_executable}" -jar "{DEFAULT_JOSM_JAR}"'
+
+        for fn in os.listdir(graph_path):
+            if fn.endswith(".pbf"):
+                cmd += f' "{os.path.join(graph_path, fn)}"'
+
+        subprocess.Popen(cmd, shell=True)
+
 
     def import_project_area(self):
         table = Projektgebiet.get_table()

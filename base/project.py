@@ -50,6 +50,7 @@ APPDATA_PATH = os.path.join(p, 'Gruenflaechenbewertung')
 JAVA_DEFAULT = ''
 
 DEFAULT_OTP_JAR = os.path.join(BASE_PATH, 'lib', 'otp-ggr-stable.jar')
+DEFAULT_JOSM_JAR = os.path.join(BASE_PATH, 'lib', 'josm-tested.jar')
 DEFAULT_JYTHON_PATH = os.path.join(BASE_PATH, 'lib',
                                    'jython-standalone-2.7.0.jar')
 DEFAULT_GRAPH_PATH = os.path.join(APPDATA_PATH, 'otp_graphs')
