@@ -290,6 +290,7 @@ class Layer(ABC):
             return
         self.layer.updateExtents()
         extent = self.layer.extent()
+        print(extent)
         if not extent.isEmpty():
             transform = QgsCoordinateTransform(
                 self.layer.crs(), self.canvas.mapSettings().destinationCrs(),

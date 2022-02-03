@@ -361,7 +361,8 @@ class OTPMainWindow(QtCore.QObject):
                 self.project_manager.active_project = None
                 self.canvas.mapCanvasRefreshed.disconnect(on_refresh)
             self.canvas.mapCanvasRefreshed.connect(on_refresh)
-            self.canvas.refreshAllLayers()
+            self.canvas.refresh()
+
 
     def remove_router(self):
         router = self.ui.router_combo.currentText()
@@ -410,11 +411,19 @@ class OTPMainWindow(QtCore.QObject):
                     p.groupname==project.groupname)
 
         self.add_background_inputs()
-        self.add_result_layers()
-        self.add_foreground_inputs()
 
-        backgroundOSM = OSMBackgroundLayer(groupname='Hintergrundkarten')
-        backgroundOSM.draw()
+        def on_refresh():
+            self.project_area_output.zoom_to()
+            self.canvas.mapCanvasRefreshed.disconnect(on_refresh)
+
+            self.add_result_layers()
+            self.add_foreground_inputs()
+
+            backgroundOSM = OSMBackgroundLayer(groupname='Hintergrundkarten')
+            backgroundOSM.draw()
+
+        self.canvas.mapCanvasRefreshed.connect(on_refresh)
+        self.canvas.refresh()
 
     def add_foreground_inputs(self):
         groupname = 'Eingangsdaten (Grünflächen)'
@@ -460,8 +469,6 @@ class OTPMainWindow(QtCore.QObject):
         self.project_area_output.draw(label='Projektgebiet',
             style_file='projektgebiet.qml',
             redraw=False)
-
-        self.project_area_output.zoom_to()
 
     def add_result_layers(self):
         groupname = 'Ergebnisse'
@@ -716,6 +723,11 @@ class OTPMainWindow(QtCore.QObject):
         dialog.show()
 
     def analyse(self, target_file):
+        project = self.project_manager.active_project
+        project_group = project.get_group()
+        result_group = project_group.findGroup('Ergebnisse')
+        if result_group:
+            result_group.removeAllChildren()
         job = AnalyseRouting(target_file, self.green_output.layer.getFeatures(),
                              parent=self.ui)
         dialog = ProgressDialog(job, parent=self.ui, title='Analyse',

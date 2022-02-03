@@ -29,7 +29,7 @@ import shutil
 import sys
 from collections import OrderedDict
 from typing import Tuple, List, Union
-from qgis.core import (QgsVectorLayer, QgsLayerTreeGroup,
+from qgis.core import (QgsVectorLayer, QgsProject, QgsLayerTreeGroup,
                        QgsCoordinateReferenceSystem)
 
 from .database import Field, Table, FeatureCollection, Workspace
@@ -274,6 +274,12 @@ class Project:
         '''
         return ProjectManager().basedata
 
+    def get_group(self):
+        qgisproject = QgsProject.instance()
+        root = qgisproject.layerTreeRoot()
+        project_group = root.findGroup(self.groupname)
+        return project_group
+
     def remove(self):
         '''
         remove the project and its folder
@@ -386,7 +392,7 @@ class ProjectManager(metaclass=Singleton):
             self._projects[project.name] = project
 
     @property
-    def active_project(self):
+    def active_project(self) -> Project:
         '''
         active project, if not defined else, all read/write access of project
         data will be done in this project
