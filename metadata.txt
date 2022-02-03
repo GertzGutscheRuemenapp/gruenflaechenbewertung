@@ -2,7 +2,7 @@
 name=GruenflaechenOTP
 qgisMinimumVersion=3.10
 description=Berechnung des Versorgungsgrads mit Grünflächen
-version=0.8
+version=0.9
 author=GGR
 email=franke@ggr-planung.de
 

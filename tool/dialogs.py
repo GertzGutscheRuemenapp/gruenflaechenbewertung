@@ -94,7 +94,7 @@ class InfoDialog(QtWidgets.QDialog, INFO_FORM_CLASS):
         self.parent = parent
         self.setupUi(self)
         self.close_button.clicked.connect(self.close)
-        wd = os.path.dirname(os.path.realpath(__file__))
+        wd = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
         meta_file = os.path.join(wd, 'metadata.txt')
         if os.path.exists(meta_file):
             version = parse_version(meta_file)
