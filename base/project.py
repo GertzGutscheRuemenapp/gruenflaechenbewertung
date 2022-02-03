@@ -768,8 +768,29 @@ class TerrestrisBackgroundLayer(TileLayer):
         super().__init__(url, groupname=groupname, prepend=prepend)
 
     def draw(self, checked=True):
-        super().draw('Terrestris © OpenStreetMap-Mitwirkende',
+        super().draw('Terrestris (grau) © OpenStreetMap-Mitwirkende',
                      checked=checked, expanded=False)
         self.layer.setTitle(
             'Karte terrestris.de CC-BY-SA (openstreetmap.org/copyright), '
             'Kartendaten Openstreetmap ODbL')
+
+
+class TopPlusOpenBackgroundLayer(TileLayer):
+    '''
+    grey background WMS-layer with OSM map data
+    provided by terrestris.de (openstreetmap.org/copyright)
+    '''
+
+    def __init__(self, groupname: str = '', prepend: bool = False):
+
+        url = (f'crs=EPSG:{settings.EPSG}&dpiMode=7&format=image/png&'
+               'layers=web_grau&styles=default&'
+               'tileMatrixSet=EU_EPSG_25832_TOPPLUS&'
+               'url=https://sgx.geodatenzentrum.de/wmts_topplus_open/'
+               '1.0.0/WMTSCapabilities.xml')
+        super().__init__(url, groupname=groupname, prepend=prepend)
+
+    def draw(self, checked=True):
+        super().draw('BKG TopPlusOpen grau',
+                     checked=checked, expanded=False)
+        self.layer.setTitle('BKG TopPlusOpen (grau)')

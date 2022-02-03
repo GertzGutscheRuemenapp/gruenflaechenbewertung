@@ -10,8 +10,10 @@ from qgis.core import (QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel,
 import shutil
 
 from gruenflaechenotp.base.project import (ProjectManager, settings,
-                                           DEFAULT_JOSM_JAR,
-                                           ProjectLayer, OSMBackgroundLayer)
+                                           DEFAULT_JOSM_JAR, ProjectLayer,
+                                           TopPlusOpenBackgroundLayer,
+                                           OSMBackgroundLayer,
+                                           TerrestrisBackgroundLayer)
 from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, InfoDialog,
                                            SettingsDialog, NewProjectDialog,
                                            NewRouterDialog, ImportLayerDialog,
@@ -421,6 +423,14 @@ class OTPMainWindow(QtCore.QObject):
 
             backgroundOSM = OSMBackgroundLayer(groupname='Hintergrundkarten')
             backgroundOSM.draw()
+
+            backgroundTPO = TopPlusOpenBackgroundLayer(
+                groupname='Hintergrundkarten')
+            backgroundTPO.draw(checked=False)
+
+            backgroundTPO = TerrestrisBackgroundLayer(
+                groupname='Hintergrundkarten')
+            backgroundTPO.draw(checked=False)
 
         self.canvas.mapCanvasRefreshed.connect(on_refresh)
         self.canvas.refresh()
