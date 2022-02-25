@@ -12,7 +12,7 @@ import shutil
 from gruenflaechenotp.base.project import (ProjectManager, settings,
                                            DEFAULT_JOSM_JAR, ProjectLayer,
                                            TopPlusOpenBackgroundLayer,
-                                           OSMBackgroundLayer,
+                                           OSMBackgroundLayer, OSMOfflineLayer,
                                            TerrestrisBackgroundLayer)
 from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, InfoDialog,
                                            SettingsDialog, NewProjectDialog,
@@ -428,9 +428,13 @@ class OTPMainWindow(QtCore.QObject):
                 groupname='Hintergrundkarten')
             backgroundTPO.draw(checked=False)
 
-            backgroundTPO = TerrestrisBackgroundLayer(
+            backgroundTerr = TerrestrisBackgroundLayer(
                 groupname='Hintergrundkarten')
-            backgroundTPO.draw(checked=False)
+            backgroundTerr.draw(checked=False)
+
+            backgroundOffOSM = OSMOfflineLayer(
+                groupname='Hintergrundkarten')
+            backgroundOffOSM.draw(checked=False)
 
         self.canvas.mapCanvasRefreshed.connect(on_refresh)
         self.canvas.refresh()
@@ -466,18 +470,18 @@ class OTPMainWindow(QtCore.QObject):
             style_file='adressen.qml',
             redraw=False)
 
-        blocks = Baubloecke.get_table(create=True)
-        self.blocks_output = ProjectLayer.from_table(
-            blocks, groupname=groupname)
-        self.blocks_output.draw(label='Baublöcke',
-            style_file='bloecke.qml',
-            redraw=False)
-
         project_area = Projektgebiet.get_table(create=True)
         self.project_area_output = ProjectLayer.from_table(
             project_area, groupname=groupname)
         self.project_area_output.draw(label='Projektgebiet',
             style_file='projektgebiet.qml',
+            redraw=False)
+
+        blocks = Baubloecke.get_table(create=True)
+        self.blocks_output = ProjectLayer.from_table(
+            blocks, groupname=groupname)
+        self.blocks_output.draw(label='Baublöcke',
+            style_file='bloecke.qml',
             redraw=False)
 
     def add_result_layers(self):

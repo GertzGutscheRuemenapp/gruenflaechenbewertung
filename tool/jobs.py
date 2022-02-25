@@ -96,17 +96,16 @@ class ImportLayer(Worker):
             if geom.isEmpty():
                 n_broken_geometries += 1
             else:
-                error = False
                 if not geom.isGeosValid():
-                    error = True
+                    n_broken_geometries += 1
                     try:
                         geom = geom.makeValid()
                         geom.transform(tr)
                     except:
                         pass
-                    # still not valid -> add empty geometry instead
+                    # still not valid -> skip feature
                     if not geom.isGeosValid():
-                        geom = QgsGeometry()
+                        continue
                     else:
                         repaired += 1
                 else:
@@ -116,10 +115,8 @@ class ImportLayer(Worker):
                     try:
                         geom.transform(tr)
                     except:
-                        geom = QgsGeometry()
-                        error = True
-                if error:
-                    n_broken_geometries += 1
+                        n_broken_geometries += 1
+                        continue
 
             attrs = {}
             for f_in, f_out in self.fields:
@@ -135,8 +132,8 @@ class ImportLayer(Worker):
             self.log(f'{n_broken_geometries} Features hatten keine oder defekte'
                      f' Geometrien. {repaired} davon konnten repariert werden.')
         if not_repaired:
-            self.log(f'{not_repaired} Features wurde ohne Geometrie in das '
-                     'Projekt übernommen', warning=True)
+            self.log(f'{not_repaired} Features mit irreparablen Geometrien '
+                     'wurden nicht in das Projekt übernommen', warning=True)
 
 
 class ResetLayers(Worker):
@@ -183,14 +180,21 @@ class AnalyseRouting(Worker):
                                             left_on='baublock', right_on='fid')
 
         green_spaces = Gruenflaechen.features()
+        n_without_geom = 0
         area_data = []
         for feat in green_spaces:
+            if not feat.geom:
+                n_without_geom += 1
+                continue
             area_data.append((feat.id, feat.geom.area()))
         df_areas = pd.DataFrame(
             columns=['gruenflaeche', 'area'], data=area_data)
         df_entrances = GruenflaechenEingaengeProcessed.features().to_pandas()
         df_entrances = df_entrances.merge(
             df_areas, how='left', on='gruenflaeche')
+        if n_without_geom:
+            self.log(f'{n_without_geom} Grünflächen ohne Geometrie werden '
+                     'übersprungen')
 
         # for some reason pandas automatically replaces underscores in header
         # with spaces, no possibility to turn that off

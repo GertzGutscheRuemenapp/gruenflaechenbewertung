@@ -754,6 +754,22 @@ class OSMBackgroundLayer(TileLayer):
             'copyright), Kartendaten Openstreetmap ODbL')
 
 
+class OSMOfflineLayer(TileLayer):
+
+    def __init__(self, groupname: str = '', prepend: bool = False):
+        path = os.path.join(
+            settings.TEMPLATE_PATH, 'offline', 'OSM').replace("\\","/")
+        url = f'type=xyz&url=file:///{path}' + '/{z}/{x}/{y}.png&zmax=14&zmin=10'
+        super().__init__(url, groupname=groupname, prepend=prepend)
+
+    def draw(self, checked=True):
+        super().draw('Offline OpenStreetMap  © OpenStreetMap-Mitwirkende',
+                     checked=checked)
+        self.layer.setTitle(
+            'Karte openstreetmap.org CC-BY-SA (openstreetmap.org/'
+            'copyright), Kartendaten Openstreetmap ODbL')
+
+
 class TerrestrisBackgroundLayer(TileLayer):
     '''
     grey background WMS-layer with OSM map data
