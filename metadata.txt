@@ -2,11 +2,11 @@
 name=GruenflaechenOTP
 qgisMinimumVersion=3.10
 description=Berechnung des Versorgungsgrads mit Grünflächen
-version=1.0.1
+version=1.1
 author=GGR
 email=franke@ggr-planung.de
 
-about=Berechnung des Versorgungsgrads mit Grünflächen am Beispiel Lichtenberg. Der angepasste OpenTripPlanner und Jython werden mit diesem Plugin ausgeliefert. Zusätzlich muss das Java Development Kit 8 installiert werden.
+about=Berechnung des Versorgungsgrads mit Grünflächen am Beispiel Lichtenberg. Der angepasste OpenTripPlanner und Jython werden mit diesem Plugin ausgeliefert. Zusätzlich muss Java 1.8 installiert werden.
 
 tracker=github.com
 repository=github.com

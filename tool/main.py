@@ -35,7 +35,7 @@ import tempfile
 import webbrowser
 
 TITLE = "Grünflächenbewertung"
-DEFAULT_ROUTER = "Standardrouter_Lichtenberg"
+DEFAULT_ROUTERS = ["Standardrouter_Berlin", "Standardrouter_Lichtenberg"]
 
 # how many results are written while running batch script
 PRINT_EVERY_N_LINES = 100
@@ -116,8 +116,8 @@ class OTPMainWindow(QtCore.QObject):
 
         def change_router(name):
             save_project_setting('router', name)
-            self.ui.remove_router_button.setEnabled(name != DEFAULT_ROUTER)
-            self.ui.build_router_button.setEnabled(name != DEFAULT_ROUTER)
+            self.ui.remove_router_button.setEnabled(name not in DEFAULT_ROUTERS)
+            self.ui.build_router_button.setEnabled(name not in DEFAULT_ROUTERS)
         self.ui.router_combo.currentTextChanged.connect(change_router)
 
         def open_current_router():
@@ -202,7 +202,7 @@ class OTPMainWindow(QtCore.QObject):
 
         if ok:
             template_path = os.path.join(
-                settings.TEMPLATE_PATH, DEFAULT_ROUTER)
+                settings.TEMPLATE_PATH, DEFAULT_ROUTERS[0])
             router_path = os.path.join(graph_path, router_name)
             shutil.copytree(template_path, router_path)
             self.project_settings.router = router_name
@@ -598,21 +598,22 @@ class OTPMainWindow(QtCore.QObject):
         else:
             if not os.path.exists(graph_path):
                 os.makedirs(graph_path)
-            default_router_path = os.path.join(graph_path, DEFAULT_ROUTER)
-            if not os.path.exists(default_router_path):
-                template_path = os.path.join(
-                    settings.TEMPLATE_PATH, DEFAULT_ROUTER)
-                shutil.copytree(template_path, default_router_path)
+            for router in DEFAULT_ROUTERS:
+                router_path = os.path.join(graph_path, router)
+                if not os.path.exists(router_path):
+                    template_path = os.path.join(
+                        settings.TEMPLATE_PATH, router)
+                    shutil.copytree(template_path, router_path)
             # subdirectories in graph-dir are treated as routers by OTP
             for i, subdir in enumerate(os.listdir(graph_path)):
                 path = os.path.join(graph_path, subdir)
                 if os.path.isdir(path):
-                    graph_file = os.path.join(path, 'Graph.obj')
-                    if os.path.exists(graph_file):
-                        self.ui.router_combo.addItem(subdir)
-                        if current_router and current_router == subdir:
-                            idx = i
-                            current_found = True
+                    #graph_file = os.path.join(path, 'Graph.obj')
+                    #if os.path.exists(graph_file):
+                    self.ui.router_combo.addItem(subdir)
+                    if current_router and current_router == subdir:
+                        idx = i
+                        current_found = True
             self.ui.router_combo.setEnabled(True)
             self.ui.create_router_button.setEnabled(True)
         self.ui.router_combo.setCurrentIndex(idx)
@@ -625,9 +626,9 @@ class OTPMainWindow(QtCore.QObject):
             self.project_settings.save()
 
         self.ui.remove_router_button.setEnabled(
-            current_router != DEFAULT_ROUTER)
+            current_router not in DEFAULT_ROUTERS)
         self.ui.build_router_button.setEnabled(
-            current_router != DEFAULT_ROUTER)
+            current_router not in DEFAULT_ROUTERS)
 
     def calculate(self):
         otp_jar = settings.system['otp_jar_file']
@@ -667,7 +668,7 @@ class OTPMainWindow(QtCore.QObject):
                 self.progress_log = dialog.logs
                 self.route()
         dialog = ProgressDialog(job, on_close=on_close, auto_close=True,
-                                title='Vorbereitung',
+                                title='Vorbereitung (1/3)',
                                 hide_auto_close=True, parent=self.ui)
         dialog.show()
 
@@ -747,6 +748,7 @@ class OTPMainWindow(QtCore.QObject):
         dialog = ExecOTPDialog(cmd, parent=self.ui,
                                start_elapsed=self.elapsed_time,
                                logs=self.progress_log,
+                               title='Routing (2/3)',
                                n_points=origin_layer.featureCount(),
                                points_per_tick=PRINT_EVERY_N_LINES,
                                on_close=on_close,
@@ -761,7 +763,7 @@ class OTPMainWindow(QtCore.QObject):
             result_group.removeAllChildren()
         job = AnalyseRouting(target_file, self.green_output.layer.getFeatures(),
                              parent=self.ui)
-        dialog = ProgressDialog(job, parent=self.ui, title='Analyse',
+        dialog = ProgressDialog(job, parent=self.ui, title='Analyse (3/3)',
                                 start_elapsed=self.elapsed_time,
                                 logs=self.progress_log,
                                 on_success=lambda x: self.add_result_layers())

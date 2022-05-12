@@ -17,7 +17,6 @@ CSV_FILTER = u'Comma-seperated values (*.csv)'
 JAR_FILTER = u'Java Archive (*.jar)'
 ALL_FILE_FILTER = u'Java Executable (java.*)'
 
-
 INFO_FORM_CLASS, _ = uic.loadUiType(os.path.join(
     settings.BASE_PATH, 'ui', 'info.ui'))
 ROUTER_FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -184,15 +183,39 @@ class NewProjectDialog(Dialog):
         if confirmed:
             return (confirmed, self.name_edit.text(),
                     self.lichtenberg_check.isChecked())
-        return False, None
+        return False, None, False
 
 
-class NewRouterDialog(NewProjectDialog):
+class NewRouterDialog(Dialog):
+    def __init__(self, placeholder='', excluded_names=[], **kwargs):
+        self.placeholder = placeholder
+        self.excluded_names = excluded_names
+        super().__init__(**kwargs)
+
     def setupUi(self):
-        super().setupUi()
+        self.setMinimumSize(500, 200)
         self.setWindowTitle('Neuen Router erstellen')
-        self.setMinimumSize(400, 200)
-        self.label.setText('Name des Routers')
+
+        layout = QtWidgets.QVBoxLayout(self)
+        self.label = QtWidgets.QLabel('Name des Routers')
+        self.name_edit = QtWidgets.QLineEdit()
+        self.name_edit.setText(self.placeholder)
+        self.name_edit.textChanged.connect(self.validate)
+        layout.addWidget(self.label)
+        layout.addWidget(self.name_edit)
+
+        self.status_label = QtWidgets.QLabel()
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel,
+            QtCore.Qt.Horizontal, self)
+        self.ok_button = buttons.button(QtWidgets.QDialogButtonBox.Ok)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.validate()
 
     def validate(self):
         '''
@@ -216,6 +239,15 @@ class NewRouterDialog(NewProjectDialog):
 
         self.status_label.setText(status_text)
         self.ok_button.setEnabled(not error and len(name) > 0)
+
+    def show(self):
+        '''
+        show dialog and return selections made by user
+        '''
+        confirmed = self.exec_()
+        if confirmed:
+            return (confirmed, self.name_edit.text())
+        return False, None
 
 
 class ImportLayerDialog(Dialog):
@@ -361,8 +393,9 @@ class ExecOTPDialog(ProgressDialog):
     n_points: number of points to calculate in one iteration
     points_per_tick: how many points are calculated before showing progress
     """
-    def __init__(self, command, n_points=0, points_per_tick=50, **kwargs):
-        super().__init__(None, title='OTP Routing', **kwargs)
+    def __init__(self, command, n_points=0, points_per_tick=50,
+                 title='OTP Routing', **kwargs):
+        super().__init__(None, title=title, **kwargs)
 
         # QProcess object for external app
         self.process = QtCore.QProcess(self)
@@ -448,7 +481,9 @@ class ExecBuildRouterDialog(ProgressDialog):
         super().run()
         self.show_status('<br><b>Bauen des Routers</b><br>')
         self.show_status('Entferne existierenden Graph...')
-        os.remove(os.path.join(self.folder, 'Graph.obj'))
+        graph_file = os.path.join(self.folder, 'Graph.obj')
+        if os.path.exists(graph_file):
+            os.remove(graph_file)
         self.show_status('Script: <i>' + self.command + '</i>')
         self.process.start(self.command)
 
