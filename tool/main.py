@@ -6,7 +6,8 @@ from qgis import utils
 from qgis._core import QgsCoordinateReferenceSystem
 from qgis.core import (QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel,
                        QgsSymbol, QgsSimpleFillSymbolLayer, QgsStyle,
-                       QgsRendererRange, QgsGraduatedSymbolRenderer)
+                       QgsRendererRange, QgsGraduatedSymbolRenderer,
+                       QgsCoordinateTransform, QgsRectangle)
 import shutil
 
 from gruenflaechenotp.base.project import (ProjectManager, settings,
@@ -180,10 +181,11 @@ class OTPMainWindow(QtCore.QObject):
         '''
         excluded_names = [p.name for p in self.project_manager.projects]
         dialog = NewProjectDialog(excluded_names=excluded_names)
-        ok, project_name = dialog.show()
+        ok, project_name, prefill_project = dialog.show()
 
         if ok:
-            job = CreateProject(project_name, parent=self.ui)
+            job = CreateProject(project_name, prefill=prefill_project,
+                                parent=self.ui)
             def on_success(project):
                 self.project_manager.active_project = project
                 self.ui.project_combo.addItem(project.name, project)
@@ -293,11 +295,17 @@ class OTPMainWindow(QtCore.QObject):
             dialog.show()
 
     def reset_layer(self, table_class):
-        job = ResetLayers(tables=[table_class.get_table()])
-        dialog = ProgressDialog(
-            job, parent=self.ui,
-            on_success=lambda x: self.canvas.refreshAllLayers())
-        dialog.show()
+        reply = QtWidgets.QMessageBox.question(
+            self.ui, 'Daten zurücksetzen',
+            'Soll der Layer auf die Standarddaten '
+            'Lichtenbergs zurückgesetzt werden?)',
+             QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
+        if reply == QtWidgets.QMessageBox.Yes:
+            job = ResetLayers(tables=[table_class.get_table()])
+            dialog = ProgressDialog(
+                job, parent=self.ui,
+                on_success=lambda x: self.canvas.refreshAllLayers())
+            dialog.show()
 
     def clone_project(self):
         '''
@@ -415,7 +423,16 @@ class OTPMainWindow(QtCore.QObject):
         self.add_background_inputs()
 
         def on_refresh():
-            self.project_area_output.zoom_to()
+            zoomed = self.project_area_output.zoom_to()
+            if not zoomed:
+                transform = QgsCoordinateTransform(
+                    QgsCoordinateReferenceSystem('EPSG:4326'),
+                    self.canvas.mapSettings().destinationCrs(),
+                    QgsProject.instance())
+                x, y = (13.4, 52.51)
+                r = 0.1
+                berlin_extent = QgsRectangle(x-r, y-r, x+r, y+r)
+                self.canvas.setExtent(transform.transform(berlin_extent))
             self.canvas.mapCanvasRefreshed.disconnect(on_refresh)
 
             self.add_result_layers()

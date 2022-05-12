@@ -127,6 +127,15 @@ class NewProjectDialog(Dialog):
         layout.addWidget(self.label)
         layout.addWidget(self.name_edit)
 
+        def toggle_check(enabled):
+            settings.prefill_project = enabled
+            settings.write()
+        self.lichtenberg_check = QtWidgets.QCheckBox(
+            'Das Projekt mit den Daten von Lichtenberg initialisieren')
+        self.lichtenberg_check.setChecked(settings.prefill_project)
+        self.lichtenberg_check.toggled.connect(toggle_check)
+        layout.addWidget(self.lichtenberg_check)
+
         self.status_label = QtWidgets.QLabel()
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
@@ -173,7 +182,8 @@ class NewProjectDialog(Dialog):
         '''
         confirmed = self.exec_()
         if confirmed:
-            return confirmed, self.name_edit.text()
+            return (confirmed, self.name_edit.text(),
+                    self.lichtenberg_check.isChecked())
         return False, None
 
 

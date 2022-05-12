@@ -282,9 +282,13 @@ class Layer(ABC):
         if tree_layer:
             tree_layer.setItemVisibilityChecked(state)
 
-    def zoom_to(self):
+    def zoom_to(self) -> bool:
         '''
         zooms map canvas to the extent of this layer
+
+        Returns
+        -------
+        whether there was sth to zoom to or not
         '''
         if not self.layer:
             return
@@ -296,6 +300,8 @@ class Layer(ABC):
                 self.layer.crs(), self.canvas.mapSettings().destinationCrs(),
                 QgsProject.instance())
             self.canvas.setExtent(transform.transform(extent))
+            return True
+        return False
 
     def remove(self):
         '''

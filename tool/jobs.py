@@ -24,17 +24,26 @@ class CreateProject(Worker):
     '''
     worker for cloning a project
     '''
-    def __init__(self, project_name, parent=None):
+    def __init__(self, project_name, prefill=False, parent=None):
         super().__init__(parent=parent)
         self.project_name = project_name
         self.project_manager = ProjectManager()
+        self.prefill =  prefill
 
     def work(self):
         project = self.project_manager.create_project(self.project_name)
-        self.log('Kopiere Standarddaten...')
-        shutil.copyfile(
-            os.path.join(settings.TEMPLATE_PATH, 'data', 'project.gpkg'),
-            os.path.join(project.path, 'project.gpkg'))
+        if self.prefill:
+            self.log('Kopiere Standarddaten Lichtenbergs in das Projekt...')
+            shutil.copyfile(
+                os.path.join(settings.TEMPLATE_PATH, 'data', 'project.gpkg'),
+                os.path.join(project.path, 'project.gpkg'))
+        else:
+            self.log('Erzeuge leere Tabellen...')
+            Projektgebiet.get_table(project=project, create=True),
+            Baubloecke.get_table(project=project, create=True),
+            Gruenflaechen.get_table(project=project, create=True),
+            Adressen.get_table(project=project, create=True),
+            GruenflaechenEingaenge.get_table(project=project, create=True)
         self.log(f'Neues Projekt erfolgreich angelegt unter {project.path}')
         return project
 
@@ -149,7 +158,7 @@ class ResetLayers(Worker):
         for i, table in enumerate(self.tables):
             self.log(f'<b>Zurücksetzung der Tabelle "{table.name}"...</b>')
             table.delete_rows()
-            self.log('Importiere Standard-Features...')
+            self.log('Importiere Standard-Features Lichtenbergs...')
             base_table = self.project_manager.basedata.get_table(
                 table.name, workspace='project')
             fields = table.fields()

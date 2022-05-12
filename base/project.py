@@ -59,6 +59,7 @@ DEFAULT_SETTINGS = {
     'active_project': u'',
     'project_path': os.path.join(APPDATA_PATH, 'Projekte'),
     'graph_path': os.path.join(APPDATA_PATH, 'Router'),
+    'prefill_project': True,
     'system': {
         'otp_jar_file': DEFAULT_OTP_JAR,
         'reserved': 2,

@@ -643,14 +643,14 @@ ACHTUNG: wird ignori</string>
           <item row="3" column="2">
            <widget class="QPushButton" name="reset_blocks_button">
             <property name="text">
-             <string>auf Default zurücksetzen</string>
+             <string>Zurücksetzen</string>
             </property>
            </widget>
           </item>
           <item row="7" column="2">
            <widget class="QPushButton" name="reset_green_spaces_button">
             <property name="text">
-             <string>auf Default zurücksetzen</string>
+             <string>Zurücksetzen</string>
             </property>
            </widget>
           </item>
@@ -664,7 +664,7 @@ ACHTUNG: wird ignori</string>
           <item row="2" column="2">
            <widget class="QPushButton" name="reset_addresses_button">
             <property name="text">
-             <string>auf Default zurücksetzen</string>
+             <string>Zurücksetzen</string>
             </property>
            </widget>
           </item>
@@ -701,7 +701,7 @@ ACHTUNG: wird ignori</string>
           <item row="0" column="2">
            <widget class="QPushButton" name="reset_project_area_button">
             <property name="text">
-             <string>auf Default zurücksetzen</string>
+             <string>Zurücksetzen</string>
             </property>
            </widget>
           </item>
@@ -759,7 +759,7 @@ ACHTUNG: wird ignori</string>
           <item row="6" column="2">
            <widget class="QPushButton" name="reset_green_entrances_button">
             <property name="text">
-             <string>auf Default zurücksetzen</string>
+             <string>Zurücksetzen</string>
             </property>
            </widget>
           </item>
