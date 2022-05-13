@@ -1,6 +1,10 @@
 import os
 import math
 import subprocess
+import tempfile
+import functools
+import threading
+import sys
 from PyQt5 import uic, QtCore, QtWidgets, QtGui
 from qgis import utils
 from qgis._core import QgsCoordinateReferenceSystem
@@ -31,9 +35,6 @@ from gruenflaechenotp.tool.jobs import (CloneProject, ImportLayer, ResetLayers,
                                         CreateProject)
 from gruenflaechenotp.batch.config import Config as OTPConfig
 
-import tempfile
-import webbrowser
-
 TITLE = "Grünflächenbewertung"
 DEFAULT_ROUTERS = ["Standardrouter_Berlin", "Standardrouter_Lichtenberg"]
 
@@ -41,6 +42,16 @@ DEFAULT_ROUTERS = ["Standardrouter_Berlin", "Standardrouter_Lichtenberg"]
 PRINT_EVERY_N_LINES = 100
 main_form = os.path.join(settings.UI_PATH, 'OTP_main_window.ui')
 
+def threaded(function):
+    '''
+    wrapper for a function to execute it in a thread
+    '''
+    @functools.wraps(function)
+    def _threaded(*args, **kwargs):
+        thread = threading.Thread(target=function, args=args, kwargs=kwargs)
+        thread.start()
+        thread.join()
+    return _threaded
 
 class OTPMainWindow(QtCore.QObject):
     def __init__(self, on_close=None, parent=None):
@@ -80,9 +91,8 @@ class OTPMainWindow(QtCore.QObject):
 
         # connect menu actions
         self.ui.info_action.triggered.connect(self.show_info)
-
-        # connect menu actions
         self.ui.settings_action.triggered.connect(self.show_settings)
+        self.ui.manual_action.triggered.connect(self.open_manual)
 
         def save_project_setting(attr, value):
             self.project_settings[attr] = value
@@ -805,7 +815,12 @@ class OTPMainWindow(QtCore.QObject):
             self.setup_projects()
 
     def open_manual(self):
-        webbrowser.open_new(MANUAL_URL)
+        path = os.path.join(settings.HELP_PATH, 'Anleitung.pdf')
+        if sys.platform == 'win32':
+            threaded(os.startfile)(path)
+        else:
+            opener = 'open' if sys.platform == 'darwin' else 'xdg-open'
+            subprocess.call([opener, path])
 
     def close(self):
         '''

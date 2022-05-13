@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>OTP Einstellungen</string>
+   <string>Grundeinstellungen</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>

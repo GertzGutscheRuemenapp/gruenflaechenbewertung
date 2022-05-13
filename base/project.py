@@ -84,6 +84,7 @@ class Singleton(type):
 
 class Settings(metaclass=Singleton):
     BASE_PATH = BASE_PATH
+    HELP_PATH = os.path.join(BASE_PATH, 'help')
     UI_PATH = os.path.join(BASE_PATH, 'ui')
     TEMPLATE_PATH = os.path.join(BASE_PATH, 'templates')
     BASE_DATA_PATH = os.path.join(TEMPLATE_PATH, 'data')

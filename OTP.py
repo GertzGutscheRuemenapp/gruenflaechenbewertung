@@ -2,9 +2,10 @@ import os
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
 from gruenflaechenotp.tool.main import OTPMainWindow
+from gruenflaechenotp.base.project import settings
 
 # Initialize Qt resources from file resources.py
-from gruenflaechenotp import resources
+#from gruenflaechenotp import resources
 
 # how many results are written while running batch script
 PRINT_EVERY_N_LINES = 100
@@ -40,7 +41,8 @@ class OTP(object):
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        icon_path = ':/plugins/OTP/icon.png'
+        icon_path = os.path.join(os.path.join(
+            settings.BASE_PATH, 'ui', 'icon.png'))
         icon = QIcon(icon_path)
         self.action = QAction(icon, PLUGIN_TITLE,
                               self.iface.mainWindow())
