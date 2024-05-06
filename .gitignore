@@ -1,2 +1,12 @@
 *.wpr
 *.wpu
+*.pyc
+*.class
+/lib
+/config.xml
+/otp_config.xml
+*.*~
+/.project
+/.pydevproject
+/templates/data/*.gpkg-wal
+/templates/data/*.gpkg-shm
