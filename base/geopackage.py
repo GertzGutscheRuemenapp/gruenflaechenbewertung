@@ -567,7 +567,7 @@ class GeopackageTable(Table):
                 continue
             if isinstance(value, np.integer):
                 value = int(value)
-            if isinstance(value, np.float):
+            if isinstance(value, (np.floating, float)):
                 value = float(value)
             ret = feature.SetField(field, value)
         if geom:
@@ -678,7 +678,7 @@ class GeopackageTable(Table):
         for field_name, value in kwargs.items():
             if isinstance(value, np.integer):
                 value = int(value)
-            if isinstance(value, np.float):
+            if isinstance(value, (np.floating, float)):
                 value = float(value)
             feature.SetField(field_name, value)
         self._layer.SetFeature(feature)

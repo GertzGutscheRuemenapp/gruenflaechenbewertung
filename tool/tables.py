@@ -1,15 +1,25 @@
 from gruenflaechenotp.base.project import ProjectTable
 from gruenflaechenotp.base.database import Field
 
+defaults = {
+    'required_green': 6,
+    'max_walk_dist': 500,
+    'project_buffer': 250,
+    'use_exp': True,
+    'exp_factor': -0.003,
+}
+
 
 class ProjectSettings(ProjectTable):
-    required_green = Field(int, 6)
-    max_walk_dist = Field(int, 500)
-    project_buffer = Field(int, 250)
+    required_green = Field(int, defaults['required_green'])
+    max_walk_dist = Field(int, defaults['max_walk_dist'])
+    project_buffer = Field(int, defaults['project_buffer'])
     router = Field(str, '')
     walk_speed = Field(float, 1.33)
     wheelchair = Field(bool, False)
     max_slope = Field(float, 0.083333)
+    use_exp = Field(bool, defaults['use_exp'])
+    exp_factor = Field(float, defaults['exp_factor'])
 
     class Meta:
         workspace = 'project'
@@ -102,6 +112,13 @@ class BaublockErgebnisse(ProjectTable):
         workspace = 'results'
         geom = 'MultiPolygon'
 
+
+class GruenflaechenErgebnisse(ProjectTable):
+    besucher = Field(int, 0)
+
+    class Meta:
+        workspace = 'project'
+        geom = 'MultiPolygon'
 
 
 

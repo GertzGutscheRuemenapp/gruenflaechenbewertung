@@ -27,13 +27,16 @@ from gruenflaechenotp.base.database import Workspace
 from gruenflaechenotp.tool.tables import (
     ProjectSettings, Projektgebiet, Adressen, Baubloecke, Gruenflaechen,
     GruenflaechenEingaenge, AdressenProcessed, GruenflaechenEingaengeProcessed,
-    BaublockErgebnisse, AdressErgebnisse
+    BaublockErgebnisse, AdressErgebnisse, defaults as PROJECT_DEFAULTS
 )
 from gruenflaechenotp.base.dialogs import ProgressDialog
 from gruenflaechenotp.tool.jobs import (CloneProject, ImportLayer, ResetLayers,
                                         AnalyseRouting, PrepareRouting,
                                         CreateProject)
 from gruenflaechenotp.batch.config import Config as OTPConfig
+
+import wingdbstub
+wingdbstub.Ensure()
 
 TITLE = "Grünflächenbewertung"
 DEFAULT_ROUTERS = ["Standardrouter_Berlin", "Standardrouter_Lichtenberg"]
@@ -77,6 +80,10 @@ class OTPMainWindow(QtCore.QObject):
         if self.on_close:
             self.on_close()
 
+    def save_project_setting(self, attr, value):
+        self.project_settings[attr] = value
+        self.project_settings.save()
+
     def setupUi(self):
         '''
         prefill UI-elements and connect slots and signals
@@ -84,6 +91,7 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.create_project_button.clicked.connect(self.create_project)
         self.ui.remove_project_button.clicked.connect(self.remove_project)
         self.ui.clone_project_button.clicked.connect(self.clone_project)
+        self.ui.reset_params_button.clicked.connect(self.reset_params)
 
         self.ui.project_combo.currentIndexChanged.connect(
             lambda index: self.change_project(
@@ -94,12 +102,9 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.settings_action.triggered.connect(self.show_settings)
         self.ui.manual_action.triggered.connect(self.open_manual)
 
-        def save_project_setting(attr, value):
-            self.project_settings[attr] = value
-            self.project_settings.save()
 
         self.ui.required_green_edit.valueChanged.connect(
-            lambda x: save_project_setting('required_green', x))
+            lambda x: self.save_project_setting('required_green', x))
 
         def update_cat(x):
             if self.adress_results_output:
@@ -109,23 +114,29 @@ class OTPMainWindow(QtCore.QObject):
 
         self.ui.required_green_edit.valueChanged.connect(update_cat)
         self.ui.max_walk_dist_edit.valueChanged.connect(
-            lambda x: save_project_setting('max_walk_dist', x))
+            lambda x: self.save_project_setting('max_walk_dist', x))
         self.ui.project_buffer_edit.valueChanged.connect(
-            lambda x: save_project_setting('project_buffer', x))
+            lambda x: self.save_project_setting('project_buffer', x))
 
         self.ui.walk_speed_edit.valueChanged.connect(
-            lambda x: save_project_setting('walk_speed', x))
+            lambda x: self.save_project_setting('walk_speed', x))
+
+        self.ui.use_exp_check.toggled.connect(
+            lambda x: self.save_project_setting('use_exp', x))
+        self.ui.exp_factor_edit.valueChanged.connect(
+            lambda x: self.save_project_setting('exp_factor', x))
+
         #self.ui.wheelchair_check.stateChanged.connect(
-            #lambda: save_project_setting('wheelchair',
+            #lambda: self.save_project_setting('wheelchair',
                                          #self.ui.wheelchair_check.isChecked()))
         #self.ui.max_slope_edit.valueChanged.connect(
-            #lambda x: save_project_setting('max_slope', x))
+            #lambda x: self.save_project_setting('max_slope', x))
 
         self.ui.remove_router_button.clicked.connect(self.remove_router)
         self.ui.create_router_button.clicked.connect(self.create_router)
 
         def change_router(name):
-            save_project_setting('router', name)
+            self.save_project_setting('router', name)
             self.ui.remove_router_button.setEnabled(name not in DEFAULT_ROUTERS)
             self.ui.build_router_button.setEnabled(name not in DEFAULT_ROUTERS)
         self.ui.router_combo.currentTextChanged.connect(change_router)
@@ -418,6 +429,7 @@ class OTPMainWindow(QtCore.QObject):
         # ToDo: load layers and settings
         try:
             self.apply_project_settings(project)
+            self.setup_routers()
         except FileNotFoundError:
             return
         self.ui.tabWidget.setEnabled(True)
@@ -579,10 +591,12 @@ class OTPMainWindow(QtCore.QObject):
 
         layer.setRenderer(renderer)
 
-    def apply_project_settings(self, project):
-        self.ui.required_green_edit.blockSignals(True)
+    def apply_project_settings(self, project, block_signals=True):
+        if block_signals:
+            self.ui.required_green_edit.blockSignals(True)
         self.ui.required_green_edit.setValue(self.project_settings.required_green)
-        self.ui.required_green_edit.blockSignals(False)
+        if block_signals:
+            self.ui.required_green_edit.blockSignals(False)
         self.ui.max_walk_dist_edit.setValue(self.project_settings.max_walk_dist)
         self.ui.project_buffer_edit.setValue(self.project_settings.project_buffer)
 
@@ -590,7 +604,8 @@ class OTPMainWindow(QtCore.QObject):
         #self.ui.wheelchair_check.setChecked(self.project_settings.wheelchair)
         #self.ui.max_slope_edit.setValue(self.project_settings.max_slope)
 
-        self.setup_routers()
+        self.ui.use_exp_check.setChecked(self.project_settings.use_exp)
+        self.ui.exp_factor_edit.setValue(self.project_settings.exp_factor)
 
     def setup_routers(self):
         # try to keep old router selected
@@ -639,6 +654,22 @@ class OTPMainWindow(QtCore.QObject):
             current_router not in DEFAULT_ROUTERS)
         self.ui.build_router_button.setEnabled(
             current_router not in DEFAULT_ROUTERS)
+
+    def reset_params(self):
+        reply = QtWidgets.QMessageBox.question(
+            self.ui,
+            'Parameter zurücksetzen',
+            'Sollen die Parameter des Projekts auf ihre Standardwerte '
+            'zurückgesetzt werden?',
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No)
+        if not reply == QtWidgets.QMessageBox.Yes:
+            return
+
+        for k, v in PROJECT_DEFAULTS.items():
+            self.save_project_setting(k, v)
+        project = self.project_manager.active_project
+        self.apply_project_settings(project, block_signals=False)
 
     def calculate(self):
         otp_jar = settings.system['otp_jar_file']

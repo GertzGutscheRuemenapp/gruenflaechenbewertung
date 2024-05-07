@@ -14,10 +14,10 @@ from gruenflaechenotp.tool.tables import (GruenflaechenEingaenge, Projektgebiet,
                                           ProjectSettings, Adressen,
                                           ProjektgebietProcessed, Gruenflaechen,
                                           GruenflaechenEingaengeProcessed,
-                                          BaublockErgebnisse, AdressErgebnisse)
+                                          BaublockErgebnisse, AdressErgebnisse,
+                                          GruenflaechenErgebnisse)
 
 DEBUG = False
-EXPONENTIAL_FACTOR = -0.003
 
 
 class CreateProject(Worker):
@@ -226,12 +226,17 @@ class AnalyseRouting(Worker):
         df_merged = df_merged[df_merged['baublock'].notna() &
                               df_merged['gruenflaeche'].notna()]
 
+        exp_factor = 0 if not project_settings.use_exp \
+            else project_settings.exp_factor
+        print(exp_factor)
         df_merged['weighted_dist'] = df_merged['distance'].apply(
-            lambda x: np.exp(EXPONENTIAL_FACTOR * x))
+            lambda x: np.exp(exp_factor * x))
         df_merged['attractivity'] = (df_merged['weighted_dist'] *
                                      df_merged['area'])
         df_merged['attractivity_sum'] = df_merged.groupby(
             'adresse')['attractivity'].transform('sum')
+        #df_merged['area_sum'] = df_merged.groupby(
+        #'adresse')['area'].transform('sum')
         df_merged['addr_visit_prob'] = (df_merged['attractivity'] /
                                    df_merged['attractivity_sum'])
         df_merged['addr_visits'] = (df_merged['addr_visit_prob'] *
@@ -242,15 +247,15 @@ class AnalyseRouting(Worker):
                                           df_merged['total_area_visits'])
         df_merged['space_per_vis_weighted'] = (df_merged['space_per_visitor'] *
                                                df_merged['addr_visit_prob'])
+        df_merged = df_merged.drop(columns=['fid_x', 'fid_y', 'geom_x',
+                                            'geom_y', 'fid', 'geom'])
 
         if DEBUG:
-            df_merged = df_merged.drop(columns=['fid_x', 'fid_y', 'geom_x',
-                                                'geom_y', 'fid', 'geom'])
             ppath = ProjectManager().active_project.path
             df_merged.to_csv(os.path.join(ppath, 'schritt_8.csv'), sep=';')
 
         df_results_addr = df_merged.groupby(
-            ['adresse', 'ew_addr']).sum().reset_index()
+                ['adresse', 'ew_addr']).sum().reset_index()
         df_results_addr['space_used_addr'] = (
             df_results_addr['space_per_vis_weighted'] *
             df_results_addr['ew_addr'])
@@ -264,9 +269,9 @@ class AnalyseRouting(Worker):
 
         df_results_block = df_results_addr.merge(
             df_addresses, how='left', on='adresse')
-        df_results_block = df_results_block.drop(columns=['fid'])
-        df_results_block = df_results_block.groupby(
-            'baublock').sum().reset_index()
+        df_results_block = df_results_block.drop(
+            columns=['fid', 'geom']).groupby(
+                'baublock').sum().reset_index()
 
         df_results_block = df_blocks.merge(df_results_block, how='left',
                                            left_on='fid', right_on='baublock')
@@ -284,6 +289,18 @@ class AnalyseRouting(Worker):
         self.set_progress(60)
 
         self.log('Schreibe Ergebnisse...')
+
+        GruenflaechenErgebnisse.remove()
+        df_green_spaces = green_spaces.to_pandas()
+        results_gr = GruenflaechenErgebnisse.features(create=True)
+        results_gr.table._layer.StartTransaction()
+        for gs_id in df_merged['gruenflaeche'].unique():
+            row = df_merged[df_merged['gruenflaeche'] == gs_id].iloc[0]
+            geom = df_green_spaces[
+                df_green_spaces['fid'] == gs_id].iloc[0]['geom']
+            results_gr.add(besucher=row['total_area_visits'],
+                           geom=geom)
+        results_gr.table._layer.CommitTransaction()
 
         df_addresses_in_project = df_addresses[
             df_addresses['in_projektgebiet'] == True]
