@@ -15,7 +15,8 @@ from gruenflaechenotp.tool.tables import (GruenflaechenEingaenge, Projektgebiet,
                                           ProjektgebietProcessed, Gruenflaechen,
                                           GruenflaechenEingaengeProcessed,
                                           BaublockErgebnisse, AdressErgebnisse,
-                                          GruenflaechenErgebnisse)
+                                          GruenflaechenErgebnisse,
+                                          Erreichbarkeiten)
 
 DEBUG = False
 
@@ -290,17 +291,27 @@ class AnalyseRouting(Worker):
 
         self.log('Schreibe Ergebnisse...')
 
+        Erreichbarkeiten.remove()
+        results_rel = Erreichbarkeiten.features(create=True)
+        results_rel.table._layer.StartTransaction()
+        for index, row in df_merged.iterrows():
+            results_rel.add(gruenflaeche=row['gruenflaeche'],
+                            adresse=row['adresse'],
+                            distanz=row['distance'])
+        results_rel.table._layer.CommitTransaction()
+
         GruenflaechenErgebnisse.remove()
         df_green_spaces = green_spaces.to_pandas()
-        results_gr = GruenflaechenErgebnisse.features(create=True)
-        results_gr.table._layer.StartTransaction()
+        results_gs = GruenflaechenErgebnisse.features(create=True)
+        results_gs.table._layer.StartTransaction()
         for gs_id in df_merged['gruenflaeche'].unique():
             row = df_merged[df_merged['gruenflaeche'] == gs_id].iloc[0]
             geom = df_green_spaces[
                 df_green_spaces['fid'] == gs_id].iloc[0]['geom']
-            results_gr.add(besucher=row['total_area_visits'],
+            results_gs.add(besucher=row['total_area_visits'],
+                           gruenflaeche=gs_id,
                            geom=geom)
-        results_gr.table._layer.CommitTransaction()
+        results_gs.table._layer.CommitTransaction()
 
         df_addresses_in_project = df_addresses[
             df_addresses['in_projektgebiet'] == True]

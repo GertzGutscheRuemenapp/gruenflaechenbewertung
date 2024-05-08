@@ -11,7 +11,7 @@ from qgis._core import QgsCoordinateReferenceSystem
 from qgis.core import (QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel,
                        QgsSymbol, QgsSimpleFillSymbolLayer, QgsStyle,
                        QgsRendererRange, QgsGraduatedSymbolRenderer,
-                       QgsCoordinateTransform, QgsRectangle)
+                       QgsCoordinateTransform, QgsRectangle, QgsRelation)
 import shutil
 
 from gruenflaechenotp.base.project import (ProjectManager, settings,
@@ -27,7 +27,8 @@ from gruenflaechenotp.base.database import Workspace
 from gruenflaechenotp.tool.tables import (
     ProjectSettings, Projektgebiet, Adressen, Baubloecke, Gruenflaechen,
     GruenflaechenEingaenge, AdressenProcessed, GruenflaechenEingaengeProcessed,
-    BaublockErgebnisse, AdressErgebnisse, defaults as PROJECT_DEFAULTS
+    BaublockErgebnisse, AdressErgebnisse, GruenflaechenErgebnisse,
+    Erreichbarkeiten, defaults as PROJECT_DEFAULTS
 )
 from gruenflaechenotp.base.dialogs import ProgressDialog
 from gruenflaechenotp.tool.jobs import (CloneProject, ImportLayer, ResetLayers,
@@ -35,8 +36,8 @@ from gruenflaechenotp.tool.jobs import (CloneProject, ImportLayer, ResetLayers,
                                         CreateProject)
 from gruenflaechenotp.batch.config import Config as OTPConfig
 
-import wingdbstub
-wingdbstub.Ensure()
+#import wingdbstub
+#wingdbstub.Ensure()
 
 TITLE = "Grünflächenbewertung"
 DEFAULT_ROUTERS = ["Standardrouter_Berlin", "Standardrouter_Lichtenberg"]
@@ -67,6 +68,7 @@ class OTPMainWindow(QtCore.QObject):
         self.project_manager = ProjectManager()
         self.project_settings = None
         self.block_results_output = None
+        self.dist_results_output = None
         self.canvas = utils.iface.mapCanvas()
         #project = QgsProject.instance()
         #crs = QgsCoordinateReferenceSystem(f'epsg:{settings.EPSG}')
@@ -107,8 +109,8 @@ class OTPMainWindow(QtCore.QObject):
             lambda x: self.save_project_setting('required_green', x))
 
         def update_cat(x):
-            if self.adress_results_output:
-                self.set_result_categories(self.adress_results_output.layer)
+            if self.address_results_output:
+                self.set_result_categories(self.address_results_output.layer)
             if self.block_results_output:
                 self.set_result_categories(self.block_results_output.layer)
 
@@ -443,6 +445,7 @@ class OTPMainWindow(QtCore.QObject):
                     p.groupname==project.groupname)
 
         self.add_background_inputs()
+        self.add_foreground_inputs()
 
         def on_refresh():
             zoomed = self.project_area_output.zoom_to()
@@ -458,7 +461,6 @@ class OTPMainWindow(QtCore.QObject):
             self.canvas.mapCanvasRefreshed.disconnect(on_refresh)
 
             self.add_result_layers()
-            self.add_foreground_inputs()
 
             backgroundOSM = OSMBackgroundLayer(groupname='Hintergrundkarten')
             backgroundOSM.draw()
@@ -487,7 +489,7 @@ class OTPMainWindow(QtCore.QObject):
         self.green_entrances_output.draw(
             label='Grünflächen Eingänge',
             style_file='gruen_eingaenge.qml',
-            prepend=True,
+            #prepend=True,
             redraw=False)
 
         green = Gruenflaechen.get_table(create=True)
@@ -526,10 +528,11 @@ class OTPMainWindow(QtCore.QObject):
     def add_result_layers(self):
         groupname = 'Ergebnisse'
 
-        adress_results = AdressErgebnisse.get_table(create=True)
-        self.adress_results_output = ProjectLayer.from_table(
-            adress_results, groupname=groupname, prepend=True)
-        self.adress_results_output.draw(
+        address_results = AdressErgebnisse.get_table(create=True)
+
+        self.address_results_output = ProjectLayer.from_table(
+            address_results, groupname=groupname, prepend=True)
+        self.address_results_output.draw(
             label='verfügbare Grünfläche je Einwohner je Adresse',
             redraw=False, read_only=True, checked=False,
             filter='"einwohner" > 0')
@@ -540,8 +543,51 @@ class OTPMainWindow(QtCore.QObject):
         self.block_results_output.draw(
             label='verfügbare Grünfläche je Einwohner je Baublock',
             redraw=False, read_only=True, filter='"einwohner" > 0')
-        self.set_result_categories(self.adress_results_output.layer)
+
+        self.set_result_categories(self.address_results_output.layer)
         self.set_result_categories(self.block_results_output.layer)
+
+        gs_results = GruenflaechenErgebnisse.get_table(create=True)
+        self.gs_results_output = ProjectLayer.from_table(
+            gs_results, groupname=groupname, prepend=True)
+        self.gs_results_output.draw(
+            label='Besucher je Grünfläche',
+            redraw=False, read_only=True, checked=True)
+
+        dist_results = Erreichbarkeiten.get_table(create=True)
+        self.dist_results_output = ProjectLayer.from_table(
+            dist_results, groupname=groupname, prepend=True)
+        self.dist_results_output.draw(
+            label='Erreichbarkeiten',
+            redraw=False, read_only=True, checked=False)
+
+        self.add_relations()
+
+    def add_relations(self):
+        if not self.dist_results_output:
+            return
+        project_name = self.project_manager.active_project.name
+
+        rel_manager = QgsProject.instance().relationManager()
+        dist_id = self.dist_results_output.layer.id()
+        greens_id = self.gs_results_output.layer.id()
+        addresses_id = self.address_results_output.layer.id()
+
+        rel = QgsRelation()
+        rel.setReferencedLayer(dist_id)
+        rel.setReferencingLayer(greens_id)
+        rel.addFieldPair('gruenflaeche', 'gruenflaeche')
+        rel.setId(f'{project_name}-rel-greens')
+        rel.setName(f'"{project_name}" - Erreichbarkeiten Grünflächen')
+        rel_manager.addRelation(rel)
+
+        rel = QgsRelation()
+        rel.setReferencedLayer(addresses_id)
+        rel.setReferencingLayer(dist_id)
+        rel.addFieldPair('adresse', 'adresse')
+        rel.setId(f'{project_name}-address-rel')
+        rel.setName(f'"{project_name}" - Adressen Erreichbarkeiten')
+        rel_manager.addRelation(rel)
 
     def set_result_categories(self, layer):
         if not layer:

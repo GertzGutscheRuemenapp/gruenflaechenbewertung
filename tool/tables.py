@@ -115,10 +115,20 @@ class BaublockErgebnisse(ProjectTable):
 
 class GruenflaechenErgebnisse(ProjectTable):
     besucher = Field(int, 0)
+    gruenflaeche = Field(int, 0)
 
     class Meta:
         workspace = 'project'
         geom = 'MultiPolygon'
+
+
+class Erreichbarkeiten(ProjectTable):
+    gruenflaeche = Field(int, 0)
+    adresse = Field(int, 0)
+    distanz = Field(float, 0)
+
+    class Meta:
+        workspace = 'project'
 
 
 
