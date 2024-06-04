@@ -230,7 +230,7 @@ class ProgressDialog(Dialog):
         '''
         if isinstance(progress, QVariant):
             progress = progress.toInt()[0]
-        self.progress_bar.setValue(progress)
+        self.progress_bar.setValue(round(progress))
 
     def start_timer(self):
         '''

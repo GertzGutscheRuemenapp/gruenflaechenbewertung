@@ -445,7 +445,6 @@ class OTPMainWindow(QtCore.QObject):
                     p.groupname==project.groupname)
 
         self.add_background_inputs()
-        self.add_foreground_inputs()
 
         def on_refresh():
             zoomed = self.project_area_output.zoom_to()
@@ -461,6 +460,7 @@ class OTPMainWindow(QtCore.QObject):
             self.canvas.mapCanvasRefreshed.disconnect(on_refresh)
 
             self.add_result_layers()
+            self.add_foreground_inputs()
 
             backgroundOSM = OSMBackgroundLayer(groupname='Hintergrundkarten')
             backgroundOSM.draw()
@@ -489,7 +489,7 @@ class OTPMainWindow(QtCore.QObject):
         self.green_entrances_output.draw(
             label='Grünflächen Eingänge',
             style_file='gruen_eingaenge.qml',
-            #prepend=True,
+            prepend=True,
             redraw=False)
 
         green = Gruenflaechen.get_table(create=True)
@@ -525,7 +525,7 @@ class OTPMainWindow(QtCore.QObject):
             style_file='bloecke.qml',
             redraw=False)
 
-    def add_result_layers(self):
+    def add_result_layers(self, calculated=False):
         groupname = 'Ergebnisse'
 
         address_results = AdressErgebnisse.get_table(create=True)
@@ -562,6 +562,10 @@ class OTPMainWindow(QtCore.QObject):
             redraw=False, read_only=True, checked=False)
 
         self.add_relations()
+
+        # green input layer lies on top and covers result greens -> hide
+        if calculated and hasattr(self, 'green_output'):
+            self.green_output.set_visibility(False)
 
     def add_relations(self):
         if not self.dist_results_output:
@@ -853,7 +857,7 @@ class OTPMainWindow(QtCore.QObject):
         dialog = ProgressDialog(job, parent=self.ui, title='Analyse (3/3)',
                                 start_elapsed=self.elapsed_time,
                                 logs=self.progress_log,
-                                on_success=lambda x: self.add_result_layers())
+                                on_success=lambda x: self.add_result_layers(True))
         dialog.show()
 
     def build_router(self):
