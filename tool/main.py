@@ -495,9 +495,12 @@ class OTPMainWindow(QtCore.QObject):
         green = Gruenflaechen.get_table(create=True)
         self.green_output = ProjectLayer.from_table(
             green, groupname=groupname)
+        # green input layer lies on top and covers result greens -> hide
+        hide = hasattr(self, 'gs_results') and len(self.gs_results.features())
         self.green_output.draw(
             label='Grünflächen',
             style_file='gruenflaechen.qml',
+            checked=not(hide),
             redraw=False)
 
     def add_background_inputs(self):
@@ -525,7 +528,7 @@ class OTPMainWindow(QtCore.QObject):
             style_file='bloecke.qml',
             redraw=False)
 
-    def add_result_layers(self, calculated=False):
+    def add_result_layers(self):
         groupname = 'Ergebnisse'
 
         address_results = AdressErgebnisse.get_table(create=True)
@@ -547,9 +550,9 @@ class OTPMainWindow(QtCore.QObject):
         self.set_result_categories(self.address_results_output.layer)
         self.set_result_categories(self.block_results_output.layer)
 
-        gs_results = GruenflaechenErgebnisse.get_table(create=True)
+        self.gs_results = GruenflaechenErgebnisse.get_table(create=True)
         self.gs_results_output = ProjectLayer.from_table(
-            gs_results, groupname=groupname, prepend=True)
+            self.gs_results, groupname=groupname, prepend=True)
         self.gs_results_output.draw(
             label='Besucher je Grünfläche',
             redraw=False, read_only=True, checked=True)
@@ -562,10 +565,6 @@ class OTPMainWindow(QtCore.QObject):
             redraw=False, read_only=True, checked=False)
 
         self.add_relations()
-
-        # green input layer lies on top and covers result greens -> hide
-        if calculated and hasattr(self, 'green_output'):
-            self.green_output.set_visibility(False)
 
     def add_relations(self):
         if not self.dist_results_output:
@@ -857,7 +856,7 @@ class OTPMainWindow(QtCore.QObject):
         dialog = ProgressDialog(job, parent=self.ui, title='Analyse (3/3)',
                                 start_elapsed=self.elapsed_time,
                                 logs=self.progress_log,
-                                on_success=lambda x: self.add_result_layers(True))
+                                on_success=lambda x: self.add_result_layers())
         dialog.show()
 
     def build_router(self):
