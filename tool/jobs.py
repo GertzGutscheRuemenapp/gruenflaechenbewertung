@@ -291,14 +291,17 @@ class AnalyseRouting(Worker):
 
         self.log('Schreibe Ergebnisse...')
 
+        #project_path = ProjectManager().active_project.path
         Erreichbarkeiten.remove()
         results_rel = Erreichbarkeiten.features(create=True)
         results_rel.table._layer.StartTransaction()
-        for index, row in df_merged.iterrows():
-            results_rel.add(gruenflaeche=row['gruenflaeche'],
-                            adresse=row['adresse'],
-                            distanz=row['distance'])
-        results_rel.table._layer.CommitTransaction()
+        df_rel = df_merged.filter(['gruenflaeche','adresse','distance'], axis=1
+                                  ).rename(columns={'distance': 'distanz'})
+        results_rel.update_pandas(df_rel)
+
+        self.log('...Erreichbarkeiten ✓')
+
+        self.set_progress(85)
 
         GruenflaechenErgebnisse.remove()
         df_green_spaces = green_spaces.to_pandas()
@@ -316,6 +319,10 @@ class AnalyseRouting(Worker):
         df_addresses_in_project = df_addresses[
             df_addresses['in_projektgebiet'] == True]
 
+        self.log('...Grünflächenebene ✓')
+
+        self.set_progress(90)
+
         AdressErgebnisse.remove()
         results_addr = AdressErgebnisse.features(create=True)
         df_results_addr = df_results_addr.drop(columns=['ew_addr'])
@@ -330,6 +337,10 @@ class AnalyseRouting(Worker):
                              row['space_per_vis_weighted'], geom=row['geom'])
         results_addr.table._layer.CommitTransaction()
 
+        self.log('...Adressebene ✓')
+
+        self.set_progress(98)
+
         BaublockErgebnisse.remove()
         blocks_in_pa = df_addresses_in_project['baublock'].unique()
         df_results_block_in_pa = df_results_block[
@@ -341,6 +352,8 @@ class AnalyseRouting(Worker):
                               gruenflaeche_je_einwohner=row['space_per_inh'],
                               geom=row['geom'])
         results_block.table._layer.CommitTransaction()
+
+        self.log('...Baublockebene ✓')
 
 
 class PrepareRouting(Worker):
