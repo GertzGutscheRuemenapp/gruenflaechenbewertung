@@ -554,7 +554,7 @@ class OTPMainWindow(QtCore.QObject):
         self.gs_results_output = ProjectLayer.from_table(
             self.gs_results, groupname=groupname, prepend=True)
         self.gs_results_output.draw(
-            label='Besucher je Grünfläche',
+            label='Einwohner im Umfeld',
             redraw=False, read_only=True, checked=True)
 
         dist_results = Erreichbarkeiten.get_table(create=True)

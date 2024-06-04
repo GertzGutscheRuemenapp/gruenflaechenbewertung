@@ -287,41 +287,49 @@ class AnalyseRouting(Worker):
 
         df_results_block = df_results_block[
             ['fid', 'space_per_inh', 'geom', 'einwohner']]
-        self.set_progress(60)
 
         self.log('Schreibe Ergebnisse...')
+        self.set_progress(60)
 
         #project_path = ProjectManager().active_project.path
         Erreichbarkeiten.remove()
         results_rel = Erreichbarkeiten.features(create=True)
         results_rel.table._layer.StartTransaction()
-        df_rel = df_merged.filter(['gruenflaeche','adresse','distance'], axis=1
+        df_rel = df_merged.filter(['gruenflaeche', 'eingang','adresse','distance'], axis=1
                                   ).rename(columns={'distance': 'distanz'})
         results_rel.update_pandas(df_rel)
 
         self.log('...Erreichbarkeiten ✓')
-
         self.set_progress(85)
 
         GruenflaechenErgebnisse.remove()
         df_green_spaces = green_spaces.to_pandas()
         results_gs = GruenflaechenErgebnisse.features(create=True)
-        results_gs.table._layer.StartTransaction()
-        for gs_id in df_merged['gruenflaeche'].unique():
-            row = df_merged[df_merged['gruenflaeche'] == gs_id].iloc[0]
-            geom = df_green_spaces[
-                df_green_spaces['fid'] == gs_id].iloc[0]['geom']
-            results_gs.add(besucher=row['total_area_visits'],
-                           gruenflaeche=gs_id,
-                           geom=geom)
-        results_gs.table._layer.CommitTransaction()
+        #results_gs.table._layer.StartTransaction()
+        #for gs_id in df_merged['gruenflaeche'].unique():
+            #row = df_merged[df_merged['gruenflaeche'] == gs_id].iloc[0]
+            #geom = df_green_spaces[
+                #df_green_spaces['fid'] == gs_id].iloc[0]['geom']
+            #results_gs.add(einwohner=row['total_area_visits'],
+                           #gruenflaeche=gs_id,
+                           #geom=geom)
+        #results_gs.table._layer.CommitTransaction()
+
+        # avoid double count of green space - address combination
+        df_ew_agg = df_merged.groupby(
+            ['gruenflaeche', 'adresse']).min().groupby('gruenflaeche').sum()
+        df_results_gs = df_ew_agg.reset_index().filter(
+            ['gruenflaeche', 'ew_addr']).rename(columns={'ew_addr': 'einwohner'})
+        df_results_gs = df_results_gs.merge(df_green_spaces,
+                                            left_on='gruenflaeche',
+                                            right_on='fid', how='left')
+        results_gs.update_pandas(df_results_gs)
+
+        self.log('...Grünflächenebene ✓')
+        self.set_progress(90)
 
         df_addresses_in_project = df_addresses[
             df_addresses['in_projektgebiet'] == True]
-
-        self.log('...Grünflächenebene ✓')
-
-        self.set_progress(90)
 
         AdressErgebnisse.remove()
         results_addr = AdressErgebnisse.features(create=True)
@@ -338,7 +346,6 @@ class AnalyseRouting(Worker):
         results_addr.table._layer.CommitTransaction()
 
         self.log('...Adressebene ✓')
-
         self.set_progress(98)
 
         BaublockErgebnisse.remove()
