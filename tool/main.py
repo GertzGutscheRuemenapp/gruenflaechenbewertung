@@ -556,7 +556,8 @@ class OTPMainWindow(QtCore.QObject):
             self.gs_results, groupname=groupname, prepend=True)
         self.gs_results_output.draw(
             label='Einwohner im Umfeld',
-            redraw=False, read_only=True, checked=True)
+            style_file='ew_im_umfeld.qml',
+            redraw=False, read_only=True, checked=False)
 
         project_path = ProjectManager().active_project.path
         fp = os.path.join(project_path, 'erreichbarkeiten.csv')
