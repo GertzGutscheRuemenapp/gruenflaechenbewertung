@@ -330,8 +330,9 @@ class AnalyseRouting(Worker):
 
         AdressErgebnisse.remove()
         results_addr = AdressErgebnisse.features(create=True)
-        df_results_addr = df_results_addr.drop(columns=['ew_addr'])
-        df_results_addr = df_addresses_in_project.merge(
+        df_results_addr = df_results_addr.drop(
+            columns=['ew_addr', 'in_projektgebiet'])
+        df_results_addr = df_addresses.merge(
             df_results_addr, how='left', on='adresse')
         df_results_addr = df_results_addr.fillna(0)
 
@@ -339,7 +340,8 @@ class AnalyseRouting(Worker):
         for index, row in df_results_addr.iterrows():
             results_addr.add(adresse=row['adresse'], einwohner=row['ew_addr'],
                              gruenflaeche_je_einwohner=
-                             row['space_per_vis_weighted'], geom=row['geom'])
+                             row['space_per_vis_weighted'], geom=row['geom'],
+                             in_projektgebiet=row['in_projektgebiet'])
         results_addr.table._layer.CommitTransaction()
 
         self.log('...Adressebene ✓')

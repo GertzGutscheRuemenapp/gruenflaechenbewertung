@@ -539,7 +539,7 @@ class OTPMainWindow(QtCore.QObject):
         self.address_results_output.draw(
             label='verfügbare Grünfläche je Einwohner je Adresse',
             redraw=False, read_only=True, checked=False,
-            filter='"einwohner" > 0')
+            filter='"einwohner" > 0 AND "in_projektgebiet" = 1')
 
         block_results = BaublockErgebnisse.get_table(create=True)
         self.block_results_output = ProjectLayer.from_table(
