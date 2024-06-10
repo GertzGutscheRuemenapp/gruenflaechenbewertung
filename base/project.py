@@ -492,7 +492,7 @@ class ProjectTable:
         workspace = cls.get_workspace(project=project)
         table_name = cls.get_name()
         data_path = f'{workspace.path}|layername={table_name}'
-        layer = QgsVectorLayer(data_path, table_name, "ogr")
+        layer = QgsVectorLayer(data_path, table_name, 'ogr')
         # workaround: QGIS does not recognize SRS set in OGR source anymore
         crs = QgsCoordinateReferenceSystem(f'epsg:{settings.EPSG}')
         layer.setCrs(crs)
@@ -584,7 +584,7 @@ class ProjectLayer(Layer):
     project. Projects are organized in seperate groups in the layer tree
     '''
     def __init__(self, layername: str, data_path: str, groupname: str = '',
-                 project: Project = None, prepend: bool = True):
+                 project: Project = None, prepend: bool = True, provider='ogr'):
         '''
         Parameters
         ----------
@@ -606,7 +606,7 @@ class ProjectLayer(Layer):
         groupname = f'{self.project.groupname}/{groupname}' if groupname \
             else self.project.groupname
         super().__init__(layername, data_path, prepend=prepend,
-                         groupname=groupname)
+                         groupname=groupname, provider=provider)
         self.parent.setItemVisibilityChecked(True)
 
     @classmethod
@@ -734,6 +734,16 @@ class ProjectLayer(Layer):
         '''
         data_path = f'{table.workspace.path}|layername={table.name}'
         return ProjectLayer(table.name, data_path=data_path,
+                            groupname=groupname, prepend=prepend)
+
+
+    @classmethod
+    def from_csv(cls, layername, csv_file, groupname: str = '',
+                 prepend: bool = True, delimiter=';',
+                   ) -> ProjectLayer:
+        uri = f'file:///{csv_file.replace(os.sep, "/")}?delimiter={delimiter}'
+        return ProjectLayer(layername, data_path=uri,
+                            provider='delimitedtext',
                             groupname=groupname, prepend=prepend)
 
 

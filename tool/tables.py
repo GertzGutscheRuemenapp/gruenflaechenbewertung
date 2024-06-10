@@ -122,14 +122,4 @@ class GruenflaechenErgebnisse(ProjectTable):
         geom = 'MultiPolygon'
 
 
-class Erreichbarkeiten(ProjectTable):
-    gruenflaeche = Field(int, 0)
-    adresse = Field(int, 0)
-    distanz = Field(float, 0)
-    eingang = Field(int, 0)
-
-    class Meta:
-        workspace = 'project'
-
-
 

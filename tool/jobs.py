@@ -15,8 +15,7 @@ from gruenflaechenotp.tool.tables import (GruenflaechenEingaenge, Projektgebiet,
                                           ProjektgebietProcessed, Gruenflaechen,
                                           GruenflaechenEingaengeProcessed,
                                           BaublockErgebnisse, AdressErgebnisse,
-                                          GruenflaechenErgebnisse,
-                                          Erreichbarkeiten)
+                                          GruenflaechenErgebnisse)
 
 DEBUG = False
 
@@ -216,13 +215,14 @@ class AnalyseRouting(Worker):
                      'destination id': 'adresse',
                      'walk/bike distance (m)': 'distance'}
         )
-        df_routing = df_routing[df_routing['distance'] <=
-                                project_settings.max_walk_dist]
+        df_routing_capped = df_routing[df_routing['distance'] <=
+                                       project_settings.max_walk_dist]
         self.set_progress(35)
 
         self.log('Analysiere Grünflächennutzung...')
 
-        df_merged = df_routing.merge(df_addr_blocks, how='left', on='adresse')
+        df_merged = df_routing_capped.merge(df_addr_blocks, how='left',
+                                            on='adresse')
         df_merged = df_merged.merge(df_entrances, how='left', on='eingang')
         df_merged = df_merged[df_merged['baublock'].notna() &
                               df_merged['gruenflaeche'].notna()]
@@ -291,29 +291,26 @@ class AnalyseRouting(Worker):
         self.log('Schreibe Ergebnisse...')
         self.set_progress(60)
 
-        #project_path = ProjectManager().active_project.path
-        Erreichbarkeiten.remove()
-        results_rel = Erreichbarkeiten.features(create=True)
-        results_rel.table._layer.StartTransaction()
-        df_rel = df_merged.filter(['gruenflaeche', 'eingang','adresse','distance'], axis=1
-                                  ).rename(columns={'distance': 'distanz'})
-        results_rel.update_pandas(df_rel)
+        project_path = ProjectManager().active_project.path
+        #results_rel = Erreichbarkeiten.features(create=True)
+        df_rel = df_routing.merge(df_entrances, how='left', on='eingang')
+        df_rel = df_rel.filter(['gruenflaeche', 'eingang','adresse','distance'], axis=1
+                               ).rename(columns={
+                                   'distance': 'dist_adresse_eingang',
+                                   'gruenflaeche': 'gruenflaeche_id',
+                                   'adresse': 'adresse_id',
+                                   'eingang': 'gruenflaeche_eingang_id'
+                               })
+        df_rel.to_csv(os.path.join(project_path, 'erreichbarkeiten.csv'),
+                      sep=';', index=False)
+        #results_rel.update_pandas(df_rel)
 
         self.log('...Erreichbarkeiten ✓')
-        self.set_progress(85)
+        self.set_progress(80)
 
         GruenflaechenErgebnisse.remove()
         df_green_spaces = green_spaces.to_pandas()
         results_gs = GruenflaechenErgebnisse.features(create=True)
-        #results_gs.table._layer.StartTransaction()
-        #for gs_id in df_merged['gruenflaeche'].unique():
-            #row = df_merged[df_merged['gruenflaeche'] == gs_id].iloc[0]
-            #geom = df_green_spaces[
-                #df_green_spaces['fid'] == gs_id].iloc[0]['geom']
-            #results_gs.add(einwohner=row['total_area_visits'],
-                           #gruenflaeche=gs_id,
-                           #geom=geom)
-        #results_gs.table._layer.CommitTransaction()
 
         # avoid double count of green space - address combination
         df_ew_agg = df_merged.groupby(
@@ -326,7 +323,7 @@ class AnalyseRouting(Worker):
         results_gs.update_pandas(df_results_gs)
 
         self.log('...Grünflächenebene ✓')
-        self.set_progress(90)
+        self.set_progress(85)
 
         df_addresses_in_project = df_addresses[
             df_addresses['in_projektgebiet'] == True]
@@ -346,7 +343,7 @@ class AnalyseRouting(Worker):
         results_addr.table._layer.CommitTransaction()
 
         self.log('...Adressebene ✓')
-        self.set_progress(98)
+        self.set_progress(95)
 
         BaublockErgebnisse.remove()
         blocks_in_pa = df_addresses_in_project['baublock'].unique()

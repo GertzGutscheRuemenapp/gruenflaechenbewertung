@@ -28,7 +28,7 @@ from gruenflaechenotp.tool.tables import (
     ProjectSettings, Projektgebiet, Adressen, Baubloecke, Gruenflaechen,
     GruenflaechenEingaenge, AdressenProcessed, GruenflaechenEingaengeProcessed,
     BaublockErgebnisse, AdressErgebnisse, GruenflaechenErgebnisse,
-    Erreichbarkeiten, defaults as PROJECT_DEFAULTS
+    defaults as PROJECT_DEFAULTS
 )
 from gruenflaechenotp.base.dialogs import ProgressDialog
 from gruenflaechenotp.tool.jobs import (CloneProject, ImportLayer, ResetLayers,
@@ -461,6 +461,7 @@ class OTPMainWindow(QtCore.QObject):
 
             self.add_result_layers()
             self.add_foreground_inputs()
+            self.add_relations()
 
             backgroundOSM = OSMBackgroundLayer(groupname='Hintergrundkarten')
             backgroundOSM.draw()
@@ -557,14 +558,14 @@ class OTPMainWindow(QtCore.QObject):
             label='Einwohner im Umfeld',
             redraw=False, read_only=True, checked=True)
 
-        dist_results = Erreichbarkeiten.get_table(create=True)
-        self.dist_results_output = ProjectLayer.from_table(
-            dist_results, groupname=groupname, prepend=True)
-        self.dist_results_output.draw(
-            label='Erreichbarkeiten',
-            redraw=False, read_only=True, checked=False)
-
-        self.add_relations()
+        project_path = ProjectManager().active_project.path
+        fp = os.path.join(project_path, 'erreichbarkeiten.csv')
+        if os.path.exists(fp):
+            self.dist_results_output = ProjectLayer.from_csv(
+                'Erreichbarkeiten', fp, groupname=groupname, prepend=True)
+            self.dist_results_output.draw(
+                label='Erreichbarkeiten',
+                redraw=False, read_only=True, checked=False)
 
     def add_relations(self):
         if not self.dist_results_output:
@@ -572,22 +573,22 @@ class OTPMainWindow(QtCore.QObject):
         project_name = self.project_manager.active_project.name
 
         rel_manager = QgsProject.instance().relationManager()
-        dist_id = self.dist_results_output.layer.id()
-        greens_id = self.gs_results_output.layer.id()
-        addresses_id = self.address_results_output.layer.id()
+        dist_layer_id = self.dist_results_output.layer.id()
+        ent_layer_id = self.green_entrances_output.layer.id()
+        addr_layer_id = self.address_results_output.layer.id()
 
         rel = QgsRelation()
-        rel.setReferencedLayer(dist_id)
-        rel.setReferencingLayer(greens_id)
-        rel.addFieldPair('gruenflaeche', 'gruenflaeche')
-        rel.setId(f'{project_name}-rel-greens')
+        rel.setReferencedLayer(dist_layer_id)
+        rel.setReferencingLayer(ent_layer_id)
+        rel.addFieldPair('fid', 'gruenflaeche_eingang_id')
+        rel.setId(f'{project_name}-rel-ent')
         rel.setName(f'"{project_name}" - Erreichbarkeiten Grünflächen')
         rel_manager.addRelation(rel)
 
         rel = QgsRelation()
-        rel.setReferencedLayer(addresses_id)
-        rel.setReferencingLayer(dist_id)
-        rel.addFieldPair('adresse', 'adresse')
+        rel.setReferencedLayer(addr_layer_id)
+        rel.setReferencingLayer(dist_layer_id)
+        rel.addFieldPair('adresse_id', 'adresse')
         rel.setId(f'{project_name}-address-rel')
         rel.setName(f'"{project_name}" - Adressen Erreichbarkeiten')
         rel_manager.addRelation(rel)
@@ -853,10 +854,15 @@ class OTPMainWindow(QtCore.QObject):
             result_group.removeAllChildren()
         job = AnalyseRouting(target_file, self.green_output.layer.getFeatures(),
                              parent=self.ui)
+
+        def done():
+            self.add_result_layers()
+            self.add_relations()
+
         dialog = ProgressDialog(job, parent=self.ui, title='Analyse (3/3)',
                                 start_elapsed=self.elapsed_time,
                                 logs=self.progress_log,
-                                on_success=lambda x: self.add_result_layers())
+                                on_success=lambda x: done())
         dialog.show()
 
     def build_router(self):

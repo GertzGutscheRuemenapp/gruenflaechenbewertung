@@ -48,7 +48,7 @@ class Layer(ABC):
     '''
 
     def __init__(self, layername: str, data_path: str, groupname: str = '',
-                 prepend: bool = True):
+                 prepend: bool = True, provider='ogr'):
         '''
         Parameters
         ----------
@@ -71,6 +71,7 @@ class Layer(ABC):
         self._l = None
         self.groupname = groupname
         self.prepend = prepend
+        self.provider = provider
         self.canvas = iface.mapCanvas()
 
     @property
@@ -239,7 +240,8 @@ class Layer(ABC):
             self.remove()
 
         if not self.layer:
-            self.layer = QgsVectorLayer(self.data_path, self.layername, "ogr")
+            self.layer = QgsVectorLayer(self.data_path, self.layername,
+                                        self.provider)
             # workaround: QGIS does not recognize SRS set in OGR source anymore
             if epsg:
                 crs = QgsCoordinateReferenceSystem(f'epsg:{epsg}')
