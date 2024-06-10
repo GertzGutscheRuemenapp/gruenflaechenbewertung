@@ -432,15 +432,29 @@ class PrepareRouting(Worker):
             data=rows, columns=['adresse', 'baublock', 'geom'])
         df_addresses = df_addresses.merge(
             df_blocks, left_on='baublock', right_on='fid')
-        df_addresses['in_projektgebiet'] = False
-        df_addresses['in_projektgebiet'][
-            df_addresses['adresse'].isin(in_project)] = True
 
         df_addresses['block_count'] = (
             df_addresses.groupby('baublock')['baublock'].transform('count'))
         df_addresses['einwohner'] = (df_addresses['einwohner_block'].astype(float) /
                                      df_addresses['block_count'])
         df_addresses.drop(columns=['fid'], inplace=True)
+
+        # append missing addresses that could not be assigned to building blocks
+        df_all_addresses = Adressen.features().to_pandas()
+        addr_not_in = df_all_addresses[
+            ~df_all_addresses['fid'].isin(df_addresses['adresse'])]
+
+        idx = len(df_addresses)
+        for i, address in addr_not_in.iterrows():
+            df_addresses.loc[idx] = {'adresse': address['fid'],
+                                     'geom': address['geom'],
+                                     'einwohner': 0, 'baublock': None}
+            idx += 1
+
+        df_addresses['in_projektgebiet'] = False
+        df_addresses['in_projektgebiet'][
+            df_addresses['adresse'].isin(in_project)] = True
+
         proc_addresses = AdressenProcessed.features(create=True)
         proc_addresses.update_pandas(df_addresses)
 
