@@ -5,7 +5,7 @@ defaults = {
     'required_green': 6,
     'max_walk_dist': 500,
     'project_buffer': 250,
-    'use_exp': True,
+    'use_weight': True,
     'exp_factor': -0.003,
 }
 
@@ -18,7 +18,7 @@ class ProjectSettings(ProjectTable):
     walk_speed = Field(float, 1.33)
     wheelchair = Field(bool, False)
     max_slope = Field(float, 0.083333)
-    use_exp = Field(bool, defaults['use_exp'])
+    use_weight = Field(bool, defaults['use_weight'])
     exp_factor = Field(float, defaults['exp_factor'])
 
     class Meta:

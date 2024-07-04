@@ -782,31 +782,10 @@ class OSMOfflineLayer(TileLayer):
             'copyright), Kartendaten Openstreetmap ODbL')
 
 
-class TerrestrisBackgroundLayer(TileLayer):
-    '''
-    grey background WMS-layer with OSM map data
-    provided by terrestris.de (openstreetmap.org/copyright)
-    '''
-
-    def __init__(self, groupname: str = '', prepend: bool = False):
-
-        url = (f'crs=EPSG:{settings.EPSG}&dpiMode=7&format=image/png'
-               '&layers=OSM-WMS&styles=&url=http://ows.terrestris.de/osm-gray/'
-               'service')
-        super().__init__(url, groupname=groupname, prepend=prepend)
-
-    def draw(self, checked=True):
-        super().draw('Terrestris (grau) © OpenStreetMap-Mitwirkende',
-                     checked=checked, expanded=False)
-        self.layer.setTitle(
-            'Karte terrestris.de CC-BY-SA (openstreetmap.org/copyright), '
-            'Kartendaten Openstreetmap ODbL')
-
-
 class TopPlusOpenBackgroundLayer(TileLayer):
     '''
     grey background WMS-layer with OSM map data
-    provided by terrestris.de (openstreetmap.org/copyright)
+    provided by BKG
     '''
 
     def __init__(self, groupname: str = '', prepend: bool = False):

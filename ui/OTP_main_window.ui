@@ -134,7 +134,7 @@
          </size>
         </property>
         <property name="toolTip">
-         <string>Berechnungen starten</string>
+         <string>Berechnungen der Erreichbarkeiten und Grünflachenbewertung starten</string>
         </property>
         <property name="text">
          <string>Berechnung starten</string>
@@ -323,7 +323,7 @@ ACHTUNG: wird ignori</string>
            <item row="3" column="1">
             <widget class="QSpinBox" name="project_buffer_edit">
              <property name="toolTip">
-              <string>maximale Anzahl der Umstiege auf der Route</string>
+              <string>Puffer um das Projektgebiet in Metern. Blöcke und Adressen außerhalb gehen nicht in die Bewertung ein.</string>
              </property>
              <property name="alignment">
               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -349,12 +349,12 @@ ACHTUNG: wird ignori</string>
             </widget>
            </item>
            <item row="5" column="0">
-            <widget class="QCheckBox" name="use_exp_check">
+            <widget class="QCheckBox" name="use_weight_check">
              <property name="toolTip">
-              <string>Entfernungsgewichtung</string>
+              <string>Bei aktivierter Gewichtung werden Besuchswahrscheinlichkeiten anhand der Distanz und der Größe der Grünflächen errechnet und die Einwohner anhand der Wahrscheinlichkeiten verteilt</string>
              </property>
              <property name="text">
-              <string>Entfernungsgewichtung*</string>
+              <string>Gewichtung*</string>
              </property>
              <property name="checked">
               <bool>true</bool>
@@ -364,7 +364,7 @@ ACHTUNG: wird ignori</string>
            <item row="3" column="0">
             <widget class="QLabel" name="label_23">
              <property name="toolTip">
-              <string>maximale Anzahl der Umstiege auf der Route</string>
+              <string>Puffer um das Projektgebiet in Metern. Blöcke und Adressen außerhalb gehen nicht in die Bewertung ein.</string>
              </property>
              <property name="text">
               <string>Puffer um Projektgebiet*</string>
@@ -374,10 +374,10 @@ ACHTUNG: wird ignori</string>
            <item row="6" column="0">
             <widget class="QLabel" name="label_26">
              <property name="toolTip">
-              <string>Gewichtungsfaktor</string>
+              <string>Je niedriger der Distanzgewichtungsfaktor (bei negativem Wert), desto stärker nimmt die Attraktivität der zu besuchenden Grünfläche mit steigender Distanz ab. Auf 0 setzen, um die Distanzgewichtung zu deaktivieren.</string>
              </property>
              <property name="text">
-              <string>Gewichtungsfaktor*</string>
+              <string>Distanzgewichtungsfaktor*</string>
              </property>
             </widget>
            </item>
@@ -396,6 +396,28 @@ ACHTUNG: wird ignori</string>
               </size>
              </property>
             </spacer>
+           </item>
+           <item row="3" column="2">
+            <widget class="QLabel" name="label_19">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>20</width>
+               <height>16777215</height>
+              </size>
+             </property>
+             <property name="toolTip">
+              <string/>
+             </property>
+             <property name="text">
+              <string>m</string>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>
@@ -417,7 +439,7 @@ ACHTUNG: wird ignori</string>
              </size>
             </property>
             <property name="toolTip">
-             <string>Berechnungen starten</string>
+             <string>Zurücksetzen der obigen Parameter auf die Standardeinstellungen</string>
             </property>
             <property name="text">
              <string>zurücksetzen</string>
@@ -969,7 +991,7 @@ ACHTUNG: wird ignori</string>
  <resources/>
  <connections>
   <connection>
-   <sender>use_exp_check</sender>
+   <sender>use_weight_check</sender>
    <signal>toggled(bool)</signal>
    <receiver>exp_factor_edit</receiver>
    <slot>setEnabled(bool)</slot>

@@ -215,31 +215,36 @@ class AnalyseRouting(Worker):
                      'destination id': 'adresse',
                      'walk/bike distance (m)': 'distance'}
         )
-        df_routing_capped = df_routing[df_routing['distance'] <=
-                                       project_settings.max_walk_dist]
+        df_routing = df_routing[df_routing['distance'] <=
+                                project_settings.max_walk_dist]
         self.set_progress(35)
 
         self.log('Analysiere Grünflächennutzung...')
 
-        df_merged = df_routing_capped.merge(df_addr_blocks, how='left',
-                                            on='adresse')
+        df_merged = df_routing.merge(df_addr_blocks, how='left',
+                                     on='adresse')
         df_merged = df_merged.merge(df_entrances, how='left', on='eingang')
         df_merged = df_merged[df_merged['baublock'].notna() &
                               df_merged['gruenflaeche'].notna()]
 
-        exp_factor = 0 if not project_settings.use_exp \
-            else project_settings.exp_factor
-        print(exp_factor)
-        df_merged['weighted_dist'] = df_merged['distance'].apply(
-            lambda x: np.exp(exp_factor * x))
-        df_merged['attractivity'] = (df_merged['weighted_dist'] *
-                                     df_merged['area'])
-        df_merged['attractivity_sum'] = df_merged.groupby(
-            'adresse')['attractivity'].transform('sum')
-        #df_merged['area_sum'] = df_merged.groupby(
-        #'adresse')['area'].transform('sum')
-        df_merged['addr_visit_prob'] = (df_merged['attractivity'] /
-                                   df_merged['attractivity_sum'])
+        if project_settings.use_weight:
+            exp_factor = project_settings.exp_factor
+            df_merged['weighted_dist'] = df_merged['distance'].apply(
+                lambda x: np.exp(exp_factor * x))
+            df_merged['attractivity'] = (df_merged['weighted_dist'] *
+                                         df_merged['area'])
+            df_merged['attractivity_sum'] = df_merged.groupby(
+                'adresse')['attractivity'].transform('sum')
+                #df_merged['area_sum'] = df_merged.groupby(
+                #'adresse')['area'].transform('sum')
+            #else:
+                #df_merged['attractivity_sum']
+            df_merged['addr_visit_prob'] = (df_merged['attractivity'] /
+                                       df_merged['attractivity_sum'])
+        else:
+            # if weighting is disabled every green space has 100%
+            # probability to be visited from each adress in reach
+            df_merged['addr_visit_prob'] = 1
         df_merged['addr_visits'] = (df_merged['addr_visit_prob'] *
                                     df_merged['ew_addr'])
         df_merged['total_area_visits'] = df_merged.groupby(

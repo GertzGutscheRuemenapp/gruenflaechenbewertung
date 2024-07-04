@@ -17,8 +17,7 @@ import shutil
 from gruenflaechenotp.base.project import (ProjectManager, settings,
                                            DEFAULT_JOSM_JAR, ProjectLayer,
                                            TopPlusOpenBackgroundLayer,
-                                           OSMBackgroundLayer, OSMOfflineLayer,
-                                           TerrestrisBackgroundLayer)
+                                           OSMBackgroundLayer, OSMOfflineLayer)
 from gruenflaechenotp.tool.dialogs import (ExecOTPDialog, InfoDialog,
                                            SettingsDialog, NewProjectDialog,
                                            NewRouterDialog, ImportLayerDialog,
@@ -123,8 +122,8 @@ class OTPMainWindow(QtCore.QObject):
         self.ui.walk_speed_edit.valueChanged.connect(
             lambda x: self.save_project_setting('walk_speed', x))
 
-        self.ui.use_exp_check.toggled.connect(
-            lambda x: self.save_project_setting('use_exp', x))
+        self.ui.use_weight_check.toggled.connect(
+            lambda x: self.save_project_setting('use_weight', x))
         self.ui.exp_factor_edit.valueChanged.connect(
             lambda x: self.save_project_setting('exp_factor', x))
 
@@ -470,10 +469,6 @@ class OTPMainWindow(QtCore.QObject):
                 groupname='Hintergrundkarten')
             backgroundTPO.draw(checked=False)
 
-            backgroundTerr = TerrestrisBackgroundLayer(
-                groupname='Hintergrundkarten')
-            backgroundTerr.draw(checked=False)
-
             backgroundOffOSM = OSMOfflineLayer(
                 groupname='Hintergrundkarten')
             backgroundOffOSM.draw(checked=False)
@@ -555,9 +550,9 @@ class OTPMainWindow(QtCore.QObject):
         self.gs_results_output = ProjectLayer.from_table(
             self.gs_results, groupname=groupname, prepend=True)
         self.gs_results_output.draw(
-            label='Einwohner im Umfeld',
+            label='Einwohner im Umfeld je Grünfläche',
             style_file='ew_im_umfeld.qml',
-            redraw=False, read_only=True, checked=False)
+            redraw=False, read_only=True)
 
         project_path = ProjectManager().active_project.path
         fp = os.path.join(project_path, 'erreichbarkeiten.csv')
@@ -569,7 +564,7 @@ class OTPMainWindow(QtCore.QObject):
                 redraw=False, read_only=True, checked=False)
 
     def add_relations(self):
-        if not self.dist_results_output:
+        if not self.dist_results_output or not self.dist_results_output.layer:
             return
         project_name = self.project_manager.active_project.name
 
@@ -655,7 +650,7 @@ class OTPMainWindow(QtCore.QObject):
         #self.ui.wheelchair_check.setChecked(self.project_settings.wheelchair)
         #self.ui.max_slope_edit.setValue(self.project_settings.max_slope)
 
-        self.ui.use_exp_check.setChecked(self.project_settings.use_exp)
+        self.ui.use_weight_check.setChecked(self.project_settings.use_weight)
         self.ui.exp_factor_edit.setValue(self.project_settings.exp_factor)
 
     def setup_routers(self):
