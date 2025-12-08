@@ -567,7 +567,7 @@ class GeopackageTable(Table):
                 continue
             if isinstance(value, np.integer):
                 value = int(value)
-            if isinstance(value, np.float):
+            if isinstance(value, np.float64):
                 value = float(value)
             ret = feature.SetField(field, value)
         if geom:
@@ -678,7 +678,7 @@ class GeopackageTable(Table):
         for field_name, value in kwargs.items():
             if isinstance(value, np.integer):
                 value = int(value)
-            if isinstance(value, np.float):
+            if isinstance(value, np.float64):
                 value = float(value)
             feature.SetField(field_name, value)
         self._layer.SetFeature(feature)
@@ -785,7 +785,7 @@ class GeopackageTable(Table):
             list of strings with column names used as primary keys
         '''
         def isnan(v):
-            if isinstance(v, (np.integer, np.floating, float)):
+            if isinstance(v, (np.integer, np.float64, float)):
                 return np.isnan(v)
             return v is None
         self._layer.StartTransaction()
@@ -824,7 +824,7 @@ class GeopackageTable(Table):
         self._layer.CommitTransaction()
 
     def __len__(self) -> int:
-        count = self._layer.GetFeatureCount()
+        count = self._layer.GetFeatureCount(force=True)
         return 0 if count < 0 else count
 
     def __repr__(self):
