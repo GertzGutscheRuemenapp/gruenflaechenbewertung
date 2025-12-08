@@ -249,24 +249,24 @@ class AnalyseRouting(Worker):
             ppath = ProjectManager().active_project.path
             df_merged.to_csv(os.path.join(ppath, 'schritt_8.csv'), sep=';')
 
-        df_results_addr = df_merged.groupby(
+        df_results_addr = df_merged[['adresse', 'ew_addr', 'space_per_vis_weighted', 'in_projektgebiet']].groupby(
             ['adresse', 'ew_addr']).sum().reset_index()
         df_results_addr['space_used_addr'] = (
             df_results_addr['space_per_vis_weighted'] *
             df_results_addr['ew_addr'])
-        df_results_addr = df_results_addr.reset_index()[
-            ['adresse','space_used_addr', 'ew_addr', 'space_per_vis_weighted',
-             'in_projektgebiet']]
+        df_results_addr.reset_index(inplace=True)
+        df_results_addr.drop(columns=['in_projektgebiet'], inplace=True)
 
         if DEBUG:
             df_results_addr.to_csv(os.path.join(ppath, 'schritt_11.csv'),
                                    sep=';')
 
         df_results_block = df_results_addr.merge(
-            df_addresses, how='left', on='adresse')
-        df_results_block = df_results_block.drop(columns=['fid'])
+            df_addresses, how='left', on='adresse')[['baublock', 'space_used_addr']]
         df_results_block = df_results_block.groupby(
             'baublock').sum().reset_index()
+        # resetting index (baublock) changes dtype to float
+        df_results_block = df_results_block.astype({'baublock': 'int64'})
 
         df_results_block = df_blocks.merge(df_results_block, how='left',
                                            left_on='fid', right_on='baublock')
