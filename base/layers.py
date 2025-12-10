@@ -372,3 +372,7 @@ class TileLayer(Layer):
             checked = not tree_layer.isVisible()
         tree_layer.setItemVisibilityChecked(checked)
         tree_layer.setExpanded(expanded)
+
+    def set_title(self, title):
+        properties = self.layer.serverProperties()
+        properties.setTitle(title)

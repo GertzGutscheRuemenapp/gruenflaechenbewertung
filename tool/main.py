@@ -7,11 +7,11 @@ import threading
 import sys
 from PyQt5 import uic, QtCore, QtWidgets, QtGui
 from qgis import utils
-from qgis._core import QgsCoordinateReferenceSystem
 from qgis.core import (QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel,
                        QgsSymbol, QgsSimpleFillSymbolLayer, QgsStyle,
                        QgsRendererRange, QgsGraduatedSymbolRenderer,
-                       QgsCoordinateTransform, QgsRectangle)
+                       QgsCoordinateTransform, QgsRectangle, QgsCoordinateTransformContext,
+                       QgsCoordinateReferenceSystem)
 import shutil
 
 from gruenflaechenotp.base.project import (ProjectManager, settings,
@@ -690,7 +690,7 @@ class OTPMainWindow(QtCore.QObject):
 
         origin_layer = GruenflaechenEingaengeProcessed.as_layer()
         destination_layer = AdressenProcessed.as_layer()
-        wgs84 = QgsCoordinateReferenceSystem(4326)
+        wgs84 = QgsCoordinateReferenceSystem(f'EPSG:{4326}')
 
         tmp_dir = tempfile.mkdtemp()
         # convert layers to csv and write them to temporary directory
@@ -701,23 +701,22 @@ class OTPMainWindow(QtCore.QObject):
         o_fid_idx = [f.name() for f in origin_layer.fields()].index('eingang')
         d_fid_idx = [f.name() for f in destination_layer.fields()].index('adresse')
 
-        QgsVectorFileWriter.writeAsVectorFormat(
-            origin_layer,
-            orig_tmp_filename,
-            "utf-8",
-            wgs84,
-            "CSV",
-            attributes=[o_fid_idx],
-            layerOptions=["GEOMETRY=AS_YX"])
+        options = QgsVectorFileWriter.SaveVectorOptions()
+        options.fileEncoding = 'utf-8'
+        options.driverName = 'CSV'
+        options.layerOptions=['GEOMETRY=AS_YX'] #f'SEPARATOR=,', 'WRITE_BOM=YES']
 
-        QgsVectorFileWriter.writeAsVectorFormat(
-            destination_layer,
-            dest_tmp_filename,
-            "utf-8",
-            wgs84,
-            "CSV",
-            attributes=[d_fid_idx],
-            layerOptions=["GEOMETRY=AS_YX"])
+        options.attributes = [o_fid_idx]
+        options.ct =  QgsCoordinateTransform(origin_layer.crs(), wgs84, QgsProject.instance())
+
+        QgsVectorFileWriter.writeAsVectorFormatV3(
+            origin_layer, orig_tmp_filename, QgsProject.instance().transformContext(), options)
+
+        options.attributes = [d_fid_idx]
+        options.ct =  QgsCoordinateTransform(destination_layer.crs(), wgs84, QgsProject.instance())
+
+        QgsVectorFileWriter.writeAsVectorFormatV3(
+            destination_layer, dest_tmp_filename, QgsProject.instance().transformContext(), options)
 
         config_xml = os.path.join(tmp_dir, 'config.xml')
         config = OTPConfig(filename=config_xml)

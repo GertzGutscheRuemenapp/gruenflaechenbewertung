@@ -751,7 +751,7 @@ class OSMBackgroundLayer(TileLayer):
     def draw(self, checked=True):
         super().draw('OpenStreetMap © OpenStreetMap-Mitwirkende',
                      checked=checked)
-        self.layer.setTitle(
+        self.set_title(
             'Karte openstreetmap.org CC-BY-SA (openstreetmap.org/'
             'copyright), Kartendaten Openstreetmap ODbL')
 
@@ -767,7 +767,7 @@ class OSMOfflineLayer(TileLayer):
     def draw(self, checked=True):
         super().draw('Offline OpenStreetMap  © OpenStreetMap-Mitwirkende',
                      checked=checked)
-        self.layer.setTitle(
+        self.set_title(
             'Karte openstreetmap.org CC-BY-SA (openstreetmap.org/'
             'copyright), Kartendaten Openstreetmap ODbL')
 
@@ -788,7 +788,7 @@ class TerrestrisBackgroundLayer(TileLayer):
     def draw(self, checked=True):
         super().draw('Terrestris (grau) © OpenStreetMap-Mitwirkende',
                      checked=checked, expanded=False)
-        self.layer.setTitle(
+        self.set_title(
             'Karte terrestris.de CC-BY-SA (openstreetmap.org/copyright), '
             'Kartendaten Openstreetmap ODbL')
 
@@ -811,4 +811,4 @@ class TopPlusOpenBackgroundLayer(TileLayer):
     def draw(self, checked=True):
         super().draw('BKG TopPlusOpen grau',
                      checked=checked, expanded=False)
-        self.layer.setTitle('BKG TopPlusOpen (grau)')
+        self.set_title('BKG TopPlusOpen (grau)')

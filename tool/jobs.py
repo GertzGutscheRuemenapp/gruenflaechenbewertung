@@ -388,8 +388,7 @@ class PrepareRouting(Worker):
         df_addresses = df_addresses.merge(
             df_blocks, left_on='baublock', right_on='fid')
         df_addresses['in_projektgebiet'] = False
-        df_addresses['in_projektgebiet'][
-            df_addresses['adresse'].isin(in_project)] = True
+        df_addresses.loc[df_addresses['adresse'].isin(in_project), 'in_projektgebiet'] = True
 
         df_addresses['block_count'] = (
             df_addresses.groupby('baublock')['baublock'].transform('count'))
@@ -410,7 +409,7 @@ class PrepareRouting(Worker):
 
         green_index = QgsSpatialIndex()
         for feat in green_spaces_layer.getFeatures():
-            green_index.insertFeature(feat)
+            green_index.addFeature(feat)
         missing = 0
         max_ent_dist = 100
         proc_entrances = GruenflaechenEingaengeProcessed.features(create=True)

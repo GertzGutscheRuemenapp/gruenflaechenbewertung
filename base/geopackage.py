@@ -246,7 +246,7 @@ class GeopackageWorkspace(Workspace):
         '''
         #self._conn.Release()
         if hasattr(self, 'conn') and self._conn:
-            self._conn.Destroy()
+            self._conn.Close()
         del(self._conn)
         self._conn = None
         super().close()
