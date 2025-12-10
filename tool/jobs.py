@@ -1,6 +1,6 @@
 import shutil
 from qgis.core import (QgsCoordinateTransform, QgsGeometry, QgsSpatialIndex,
-                       QgsCoordinateReferenceSystem, QgsProject)
+                       QgsCoordinateReferenceSystem, QgsProject, QgsVectorFileWriter)
 from qgis.PyQt.QtCore import QVariant, QProcess
 import pandas as pd
 import numpy as np
@@ -316,6 +316,11 @@ class AnalyseRouting(Worker):
 
 
 class PrepareRouting(Worker):
+
+    def __init__(self, temp_dir, parent=None):
+        super().__init__(parent=parent)
+        self.temp_dir = temp_dir
+
     def work(self):
         self.log('<b>Vorbereitung des Routings</b><br>')
         project_settings = ProjectSettings.features()[0]
@@ -428,3 +433,37 @@ class PrepareRouting(Worker):
                      f'{max_ent_dist}m keiner Grünfläche zugeordnet werden.',
                      warning=True)
 
+        self.write_csv()
+
+    def write_csv(self):
+        self.log('Exportiere Start- und Zielpunkte für das Routing...')
+
+        origin_layer = GruenflaechenEingaengeProcessed.as_layer()
+        destination_layer = AdressenProcessed.as_layer()
+        wgs84 = QgsCoordinateReferenceSystem(f'EPSG:{4326}')
+
+        # convert layers to csv and write them to temporary directory
+        orig_tmp_filename = os.path.join(self.temp_dir, 'origins.csv')
+        dest_tmp_filename = os.path.join(self.temp_dir, 'destinations.csv')
+
+        o_fid_idx = [f.name() for f in origin_layer.fields()].index('eingang')
+        d_fid_idx = [f.name() for f in destination_layer.fields()].index('adresse')
+
+        options = QgsVectorFileWriter.SaveVectorOptions()
+        options.fileEncoding = 'utf-8'
+        options.driverName = 'CSV'
+        options.layerOptions=['GEOMETRY=AS_YX'] #f'SEPARATOR=,', 'WRITE_BOM=YES']
+
+        options.attributes = [o_fid_idx]
+        options.ct =  QgsCoordinateTransform(origin_layer.crs(), wgs84, QgsProject.instance())
+
+        QgsVectorFileWriter.writeAsVectorFormatV3(
+            origin_layer, orig_tmp_filename, QgsProject.instance().transformContext(), options)
+        self.log(f'{orig_tmp_filename} geschrieben')
+
+        options.attributes = [d_fid_idx]
+        options.ct =  QgsCoordinateTransform(destination_layer.crs(), wgs84, QgsProject.instance())
+
+        QgsVectorFileWriter.writeAsVectorFormatV3(
+            destination_layer, dest_tmp_filename, QgsProject.instance().transformContext(), options)
+        self.log(f'{dest_tmp_filename} geschrieben')

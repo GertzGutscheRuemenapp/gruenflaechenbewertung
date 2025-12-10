@@ -72,6 +72,7 @@ class OTPMainWindow(QtCore.QObject):
         self.on_close = on_close
         self.ui.setWindowTitle(TITLE)
         self.setupUi()
+        self.temp_dir = None
 
     def closeEvent(self, evnt):
         if self.on_close:
@@ -229,7 +230,9 @@ class OTPMainWindow(QtCore.QObject):
             if fn.endswith(".pbf"):
                 cmd += f' "{os.path.join(graph_path, fn)}"'
 
-        subprocess.Popen(cmd, shell=True)
+        #subprocess.Popen(cmd, shell=True)
+        os.system(cmd)
+        #subprocess.call(cmd)
 
 
     def import_project_area(self):
@@ -662,10 +665,12 @@ class OTPMainWindow(QtCore.QObject):
                 u'Der in den Einstellungen angegebene Java-Pfad existiert nicht!')
             msg_box.exec_()
             return
+
+        self.temp_dir = tempfile.mkdtemp()
         self.prepare_routing()
 
     def prepare_routing(self):
-        job = PrepareRouting(parent=self.ui)
+        job = PrepareRouting(self.temp_dir, parent=self.ui)
         # workaround for not being able to run process together with
         # preparation and analysis in one Thread (and therefore in one dialog)
         # keeping track of elapsed time and log to hide this
@@ -688,37 +693,7 @@ class OTPMainWindow(QtCore.QObject):
         java_executable = settings.system['java']
         memory = settings.system['reserved']
 
-        origin_layer = GruenflaechenEingaengeProcessed.as_layer()
-        destination_layer = AdressenProcessed.as_layer()
-        wgs84 = QgsCoordinateReferenceSystem(f'EPSG:{4326}')
-
-        tmp_dir = tempfile.mkdtemp()
-        # convert layers to csv and write them to temporary directory
-        orig_tmp_filename = os.path.join(tmp_dir, 'origins.csv')
-        dest_tmp_filename = os.path.join(tmp_dir, 'destinations.csv')
-        target_file = os.path.join(tmp_dir, 'results.csv')
-
-        o_fid_idx = [f.name() for f in origin_layer.fields()].index('eingang')
-        d_fid_idx = [f.name() for f in destination_layer.fields()].index('adresse')
-
-        options = QgsVectorFileWriter.SaveVectorOptions()
-        options.fileEncoding = 'utf-8'
-        options.driverName = 'CSV'
-        options.layerOptions=['GEOMETRY=AS_YX'] #f'SEPARATOR=,', 'WRITE_BOM=YES']
-
-        options.attributes = [o_fid_idx]
-        options.ct =  QgsCoordinateTransform(origin_layer.crs(), wgs84, QgsProject.instance())
-
-        QgsVectorFileWriter.writeAsVectorFormatV3(
-            origin_layer, orig_tmp_filename, QgsProject.instance().transformContext(), options)
-
-        options.attributes = [d_fid_idx]
-        options.ct =  QgsCoordinateTransform(destination_layer.crs(), wgs84, QgsProject.instance())
-
-        QgsVectorFileWriter.writeAsVectorFormatV3(
-            destination_layer, dest_tmp_filename, QgsProject.instance().transformContext(), options)
-
-        config_xml = os.path.join(tmp_dir, 'config.xml')
+        config_xml = os.path.join(self.temp_dir, 'config.xml')
         config = OTPConfig(filename=config_xml)
         config.settings['system']['n_threads'] = settings.system['n_threads']
         config.settings['origin']['id_field'] = 'eingang'
@@ -738,6 +713,10 @@ class OTPMainWindow(QtCore.QObject):
 
         working_dir = os.path.join(settings.BASE_PATH, 'batch')
 
+        orig_tmp_filename = os.path.join(self.temp_dir, 'origins.csv')
+        dest_tmp_filename = os.path.join(self.temp_dir, 'destinations.csv')
+        target_file = os.path.join(self.temp_dir, 'results.csv')
+
         cmd = (f'"{java_executable}" -Xmx{memory}G -jar "{jython_jar}" '
                f'-Dpython.path="{otp_jar}" '
                f'{working_dir}/otp_batch.py '
@@ -753,6 +732,8 @@ class OTPMainWindow(QtCore.QObject):
                 self.elapsed_time = dialog.elapsed_time
                 self.progress_log = dialog.logs
                 self.analyse(target_file)
+
+        origin_layer = GruenflaechenEingaengeProcessed.as_layer()
 
         dialog = ExecOTPDialog(cmd, parent=self.ui,
                                start_elapsed=self.elapsed_time,
