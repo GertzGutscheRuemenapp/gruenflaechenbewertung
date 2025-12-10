@@ -2,7 +2,7 @@
 name=GruenflaechenOTP
 qgisMinimumVersion=3.10
 description=Berechnung des Versorgungsgrads mit Grünflächen
-version=1.1
+version=1.2
 author=GGR
 email=franke@ggr-planung.de
 
@@ -14,8 +14,11 @@ repository=github.com
 
 # Recommended items:
 
-# Uncomment the following line and add your changelog:
-# changelog=
+changelog=
+      1.2
+      ---------
+      Anpassungen an QGIS 3.4+, Windows 11
+      Behebung von Deprecations
 
 # Tags are comma separated with spaces allowed
 tags=lichtenberg, routing, OpenTripPlanner, OTP
