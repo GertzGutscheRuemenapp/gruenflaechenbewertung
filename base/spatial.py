@@ -68,12 +68,12 @@ class Point(object):
         # a little weird to replace it and add it again, but i wanted to keep
         # the api of the old ArcGIS Project
         if isinstance(target_srid, str):
-            target_srid = target_srid.replace('epsg:', '')
+            target_srid = target_srid.lower().replace('epsg:', '')
             target_srid = int(target_srid)
 
         tr = QgsCoordinateTransform(
-            QgsCoordinateReferenceSystem(self.epsg),
-            QgsCoordinateReferenceSystem(f'epsg:{target_srid}'),
+            QgsCoordinateReferenceSystem(f'EPSG:{self.epsg}'),
+            QgsCoordinateReferenceSystem(f'EPSG:{target_srid}'),
             QgsProject.instance()
         )
         pnt = QgsPoint(self.x, self.y)
@@ -182,7 +182,7 @@ def create_layer(features: Union[List[Feature], FeatureCollection],
     layer.updateFields()
     if target_epsg:
         tr = QgsCoordinateTransform(
-            QgsCoordinateReferenceSystem(epsg), layer.crs(),
+            QgsCoordinateReferenceSystem(f'EPSG:{epsg}'), layer.crs(),
             QgsProject.instance()
         )
     for feature in features:

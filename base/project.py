@@ -494,7 +494,7 @@ class ProjectTable:
         data_path = f'{workspace.path}|layername={table_name}'
         layer = QgsVectorLayer(data_path, table_name, "ogr")
         # workaround: QGIS does not recognize SRS set in OGR source anymore
-        crs = QgsCoordinateReferenceSystem(f'epsg:{settings.EPSG}')
+        crs = QgsCoordinateReferenceSystem(f'EPSG:{settings.EPSG}')
         layer.setCrs(crs)
         return layer
 

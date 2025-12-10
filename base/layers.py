@@ -242,7 +242,7 @@ class Layer(ABC):
             self.layer = QgsVectorLayer(self.data_path, self.layername, "ogr")
             # workaround: QGIS does not recognize SRS set in OGR source anymore
             if epsg:
-                crs = QgsCoordinateReferenceSystem(f'epsg:{epsg}')
+                crs = QgsCoordinateReferenceSystem(f'EPSG:{epsg}')
                 self.layer.setCrs(crs)
             if label:
                 self.layer.setName(label)

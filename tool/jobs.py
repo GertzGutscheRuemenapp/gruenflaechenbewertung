@@ -93,7 +93,7 @@ class ImportLayer(Worker):
 
         tr = QgsCoordinateTransform(
             self.layer_crs,
-            QgsCoordinateReferenceSystem(f'epsg:{settings.EPSG}'),
+            QgsCoordinateReferenceSystem(f'EPSG:{settings.EPSG}'),
             QgsProject.instance()
         )
 
