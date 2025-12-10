@@ -511,6 +511,8 @@ class SettingsDialog(Dialog):
         self.project_path_browse_button.clicked.connect(
             lambda: self.browse_path(self.project_path_edit,
                                      'Projektverzeichnis wählen'))
+        self.josm_jar_browse_button.clicked.connect(
+            lambda: self.browse_jar(self.josm_jar_edit, 'JOSM JAR wählen'))
         self.java_browse_button.clicked.connect(self.browse_java)
         self.search_java_button.clicked.connect(self.auto_java)
         self.reset_button.clicked.connect(self.reset)
@@ -523,6 +525,7 @@ class SettingsDialog(Dialog):
         self.java_edit.setText(settings.system['java'])
         self.jython_edit.setText(settings.system['jython_jar_file'])
         self.otp_jar_edit.setText(settings.system['otp_jar_file'])
+        self.josm_jar_edit.setText(settings.system['josm_jar_file'])
         self.cpu_edit.setValue(settings.system['n_threads'])
         self.memory_edit.setValue(settings.system['reserved'])
 
@@ -533,6 +536,7 @@ class SettingsDialog(Dialog):
         settings.system['java'] = self.java_edit.text()
         settings.system['jython_jar_file'] = self.jython_edit.text()
         settings.system['otp_jar_file'] = self.otp_jar_edit.text()
+        settings.system['josm_jar_file'] = self.josm_jar_edit.text()
         settings.system['n_threads'] = self.cpu_edit.value()
         settings.system['reserved'] = self.memory_edit.value()
 

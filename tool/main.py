@@ -14,8 +14,7 @@ from qgis.core import (QgsVectorFileWriter, QgsProject, QgsMapLayerProxyModel,
                        QgsCoordinateReferenceSystem)
 import shutil
 
-from gruenflaechenotp.base.project import (ProjectManager, settings,
-                                           DEFAULT_JOSM_JAR, ProjectLayer,
+from gruenflaechenotp.base.project import (ProjectManager, settings, ProjectLayer,
                                            TopPlusOpenBackgroundLayer,
                                            OSMBackgroundLayer, OSMOfflineLayer,
                                            TerrestrisBackgroundLayer)
@@ -224,16 +223,14 @@ class OTPMainWindow(QtCore.QObject):
         graph_path = os.path.join(settings.graph_path,
                                   self.project_settings.router)
         java_executable = settings.system['java']
-        cmd = f'"{java_executable}" -jar "{DEFAULT_JOSM_JAR}"'
+        josm_jar = settings.system['josm_jar_file']
+        cmd = f'"{java_executable}" -jar "{josm_jar}"'
 
         for fn in os.listdir(graph_path):
             if fn.endswith(".pbf"):
                 cmd += f' "{os.path.join(graph_path, fn)}"'
 
-        #subprocess.Popen(cmd, shell=True)
-        os.system(cmd)
-        #subprocess.call(cmd)
-
+        subprocess.Popen(cmd, shell=True)
 
     def import_project_area(self):
         table = Projektgebiet.get_table()

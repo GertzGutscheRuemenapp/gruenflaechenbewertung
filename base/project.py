@@ -66,6 +66,7 @@ DEFAULT_SETTINGS = {
         'n_threads': 2,
         'jython_jar_file': DEFAULT_JYTHON_PATH,
         'java': JAVA_DEFAULT,
+        'josm_jar_file': DEFAULT_JOSM_JAR
     }
 }
 
@@ -125,6 +126,11 @@ class Settings(metaclass=Singleton):
                 if k not in self._settings:
                     self._settings[k] = v
                     changed = True
+                if isinstance(v, dict):
+                    for _k, _v in v.items():
+                        if _k not in self._settings[k]:
+                            self._settings[k][_k] = _v
+                            changed = True
             if changed:
                 self.write()
 
